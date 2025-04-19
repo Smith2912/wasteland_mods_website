@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useCart } from '../context/CartContext';
 import { loadScript } from '@paypal/paypal-js';
@@ -18,6 +18,8 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   const router = useRouter();
   const total = getCartTotal();
   const { session, isLoading } = useAuth();
+  const paypalContainerRef = useRef<HTMLDivElement>(null);
+  const paypalButtonsRendered = useRef(false);
 
   const handleSignIn = () => {
     onClose();
@@ -41,86 +43,116 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       
       loadPayPalScript();
     }
+    
+    // Reset the rendered state when cart is closed
+    if (!isOpen) {
+      paypalButtonsRendered.current = false;
+    }
   }, [isOpen, paypalLoaded, items.length, session]);
 
   useEffect(() => {
-    // Clear previous PayPal buttons if they exist
-    const container = document.getElementById('paypal-button-container');
-    if (container) {
-      container.innerHTML = '';
+    // Only proceed if all conditions are met
+    if (!paypalLoaded || items.length === 0 || !window.paypal || !session || !isOpen) {
+      return;
     }
     
-    if (paypalLoaded && items.length > 0 && window.paypal && session) {
-      // @ts-ignore - PayPal types aren't available
-      window.paypal.Buttons({
-        createOrder: (_data: any, actions: any) => {
-          return actions.order.create({
-            purchase_units: [{
-              amount: {
-                value: total.toFixed(2),
-                currency_code: 'USD'
-              },
-              description: `Wasteland Mods Purchase - ${items.length} item(s)`
-            }]
-          });
-        },
-        onApprove: async (_data: any, actions: any) => {
-          try {
-            setProcessing(true);
-            setError(null);
-            
-            // Refresh the session to get the latest token
-            const { data: authData, error: authError } = await supabase.auth.refreshSession();
-            
-            if (authError || !authData.session) {
-              throw new Error('Authentication error. Please log in again.');
-            }
-            
-            // Capture the PayPal order (complete the payment)
-            const order = await actions.order.capture();
-            console.log('Order completed successfully', order);
-            
-            // Record the purchase using our API
-            const response = await fetch('/api/checkout', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authData.session.access_token}`
-              },
-              body: JSON.stringify({
-                items,
-                transactionId: order.id
-              }),
-              credentials: 'include'
+    // Prevent multiple renders of the PayPal buttons
+    if (paypalButtonsRendered.current) {
+      return;
+    }
+    
+    // Wait a bit to ensure the container is in the DOM
+    const renderTimer = setTimeout(() => {
+      // Check if the container exists before rendering
+      const container = paypalContainerRef.current;
+      if (!container) {
+        console.error('PayPal container element not found');
+        return;
+      }
+      
+      // Clear previous PayPal buttons if they exist
+      container.innerHTML = '';
+      
+      try {
+        // @ts-ignore - PayPal types aren't available
+        window.paypal.Buttons({
+          createOrder: (_data: any, actions: any) => {
+            return actions.order.create({
+              purchase_units: [{
+                amount: {
+                  value: total.toFixed(2),
+                  currency_code: 'USD'
+                },
+                description: `Wasteland Mods Purchase - ${items.length} item(s)`
+              }]
             });
-            
-            if (!response.ok) {
-              const result = await response.json();
-              throw new Error(result.error || 'Failed to record purchase');
+          },
+          onApprove: async (_data: any, actions: any) => {
+            try {
+              setProcessing(true);
+              setError(null);
+              
+              // Refresh the session to get the latest token
+              const { data: authData, error: authError } = await supabase.auth.refreshSession();
+              
+              if (authError || !authData.session) {
+                throw new Error('Authentication error. Please log in again.');
+              }
+              
+              // Capture the PayPal order (complete the payment)
+              const order = await actions.order.capture();
+              console.log('Order completed successfully', order);
+              
+              // Record the purchase using our API
+              const response = await fetch('/api/checkout', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${authData.session.access_token}`
+                },
+                body: JSON.stringify({
+                  items,
+                  transactionId: order.id
+                }),
+                credentials: 'include'
+              });
+              
+              if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.error || 'Failed to record purchase');
+              }
+              
+              // Payment successful
+              setPaymentSuccessful(true);
+              
+              // Clear cart and redirect to success page
+              clearCart();
+              router.push('/checkout/success');
+            } catch (error) {
+              console.error('Failed to complete order:', error);
+              setError(typeof error === 'object' && error !== null && 'message' in error 
+                ? (error as Error).message 
+                : 'There was a problem processing your payment. Please try again.');
+              setProcessing(false);
             }
-            
-            // Payment successful
-            setPaymentSuccessful(true);
-            
-            // Clear cart and redirect to success page
-            clearCart();
-            router.push('/checkout/success');
-          } catch (error) {
-            console.error('Failed to complete order:', error);
-            setError(typeof error === 'object' && error !== null && 'message' in error 
-              ? (error as Error).message 
-              : 'There was a problem processing your payment. Please try again.');
+          },
+          onError: (err: any) => {
+            console.error('PayPal error:', err);
+            setError('Payment failed. Please try again or use a different payment method.');
             setProcessing(false);
           }
-        },
-        onError: (err: any) => {
-          console.error('PayPal error:', err);
-          setError('Payment failed. Please try again or use a different payment method.');
-          setProcessing(false);
-        }
-      }).render('#paypal-button-container');
-    }
-  }, [paypalLoaded, items, total, clearCart, router, session]);
+        }).render(container);
+        
+        // Mark as rendered to prevent duplicate renders
+        paypalButtonsRendered.current = true;
+      } catch (err) {
+        console.error('Failed to render PayPal buttons:', err);
+        setError('There was a problem setting up the payment system. Please try again later.');
+      }
+    }, 100); // Short delay to ensure DOM is ready
+    
+    return () => clearTimeout(renderTimer);
+  }, [paypalLoaded, items, items.length, total, clearCart, router, session, isOpen]);
 
   if (!isOpen) return null;
 
@@ -214,7 +246,7 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                         <span>Processing payment...</span>
                       </div>
                     ) : (
-                      <div id="paypal-button-container" className="mt-4"></div>
+                      <div ref={paypalContainerRef} className="mt-4"></div>
                     )}
                     
                     <div className="mt-4 text-center text-sm text-zinc-500">
