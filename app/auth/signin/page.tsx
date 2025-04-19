@@ -10,48 +10,85 @@ function SignInContent() {
   const router = useRouter();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
   const error = searchParams.get('error');
+  const [isLoading, setIsLoading] = useState<{[key: string]: boolean}>({
+    discord: false,
+    steam: false
+  });
+  const [authError, setAuthError] = useState<string | null>(error);
 
   const handleDiscordSignIn = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'discord',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?callbackUrl=${encodeURIComponent(callbackUrl)}`,
-      },
-    });
+    try {
+      setIsLoading({...isLoading, discord: true});
+      setAuthError(null);
+      
+      console.log('Starting Discord sign-in process...');
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'discord',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+        },
+      });
+      
+      if (error) {
+        console.error('Discord auth error:', error);
+        setAuthError(error.message);
+        setIsLoading({...isLoading, discord: false});
+        return;
+      }
+      
+      console.log('Discord sign-in successful, redirecting...');
+      // The redirect will happen automatically from Supabase
+    } catch (err) {
+      console.error('Unexpected error during Discord sign-in:', err);
+      setAuthError('An unexpected error occurred. Please try again.');
+      setIsLoading({...isLoading, discord: false});
+    }
   };
 
   const handleSteamSignIn = () => {
-    router.push('/api/auth/steam');
+    try {
+      setIsLoading({...isLoading, steam: true});
+      setAuthError(null);
+      console.log('Starting Steam sign-in process...');
+      router.push('/api/auth/steam');
+    } catch (err) {
+      console.error('Unexpected error during Steam sign-in:', err);
+      setAuthError('An unexpected error occurred. Please try again.');
+      setIsLoading({...isLoading, steam: false});
+    }
   };
 
   return (
     <div className="container mx-auto p-4 max-w-md">
       <h1 className="text-2xl font-bold mb-6 text-center">Sign In</h1>
       
-      {error && (
+      {authError && (
         <div className="bg-red-500 text-white p-4 mb-4 rounded">
-          {error === "OAuthSignin" && "Error starting the sign in process."}
-          {error === "OAuthCallback" && "Error during the sign in process."}
-          {error === "OAuthCreateAccount" && "Error creating a new account."}
-          {error === "EmailCreateAccount" && "Error creating a new account."}
-          {error === "Callback" && "Error during the sign in callback."}
-          {error === "Default" && "An unexpected error occurred."}
+          {authError === "OAuthSignin" && "Error starting the sign in process."}
+          {authError === "OAuthCallback" && "Error during the sign in process."}
+          {authError === "OAuthCreateAccount" && "Error creating a new account."}
+          {authError === "EmailCreateAccount" && "Error creating a new account."}
+          {authError === "Callback" && "Error during the sign in callback."}
+          {authError === "Default" && "An unexpected error occurred."}
+          {authError && !["OAuthSignin", "OAuthCallback", "OAuthCreateAccount", "EmailCreateAccount", "Callback", "Default"].includes(authError) && authError}
         </div>
       )}
       
       <div className="flex flex-col space-y-4">
         <button
           onClick={handleDiscordSignIn}
-          className="flex items-center justify-center space-x-2 bg-[#5865F2] text-white px-4 py-3 rounded-lg hover:bg-[#4752C4] transition"
+          disabled={isLoading.discord}
+          className="flex items-center justify-center space-x-2 bg-[#5865F2] text-white px-4 py-3 rounded-lg hover:bg-[#4752C4] transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span>Sign in with Discord</span>
+          <span>{isLoading.discord ? 'Connecting to Discord...' : 'Sign in with Discord'}</span>
         </button>
         
         <button
           onClick={handleSteamSignIn}
-          className="flex items-center justify-center space-x-2 bg-[#231f20] text-white px-4 py-3 rounded-lg hover:bg-[#171717] transition"
+          disabled={isLoading.steam}
+          className="flex items-center justify-center space-x-2 bg-[#231f20] text-white px-4 py-3 rounded-lg hover:bg-[#171717] transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span>Sign in with Steam</span>
+          <span>{isLoading.steam ? 'Connecting to Steam...' : 'Sign in with Steam'}</span>
         </button>
       </div>
     </div>
