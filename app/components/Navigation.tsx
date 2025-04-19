@@ -22,14 +22,14 @@ export default function Navigation() {
   };
 
   return (
-    <nav className="bg-zinc-900 text-white py-4">
+    <nav className="bg-black border-b border-red-700 text-white py-4">
       <div className="container mx-auto px-4 flex justify-between items-center">
         <Link href="/" className="flex items-center">
           <Image 
             src="/NewWastelandModsLogoDiscord.png" 
             alt="Wasteland Mods Logo" 
-            width={50} 
-            height={50} 
+            width={80} 
+            height={80} 
             className="h-auto" 
             priority
           />
@@ -39,7 +39,7 @@ export default function Navigation() {
         <div className="md:hidden">
           <button 
             onClick={() => setIsMenuOpen(!isMenuOpen)} 
-            className="text-white p-2"
+            className="text-red-500 p-2"
           >
             {isMenuOpen ? (
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -59,8 +59,8 @@ export default function Navigation() {
             <Link
               key={item.path}
               href={item.path}
-              className={`transition-colors hover:text-green-400 ${
-                isActive(item.path) ? 'text-green-400' : ''
+              className={`transition-colors hover:text-red-500 font-bold text-lg ${
+                isActive(item.path) ? 'text-red-500 text-glow' : ''
               }`}
             >
               {item.name}
@@ -72,14 +72,14 @@ export default function Navigation() {
       
       {/* Mobile navigation */}
       {isMenuOpen && (
-        <div className="md:hidden bg-zinc-800 mt-2">
+        <div className="md:hidden bg-zinc-900 border border-red-900 mt-2 rugged-container">
           <div className="flex flex-col px-4 py-2 space-y-3">
             {navItems.map((item) => (
               <Link
                 key={item.path}
                 href={item.path}
-                className={`transition-colors hover:text-green-400 ${
-                  isActive(item.path) ? 'text-green-400' : ''
+                className={`transition-colors hover:text-red-500 ${
+                  isActive(item.path) ? 'text-red-500 text-glow' : ''
                 }`}
                 onClick={() => setIsMenuOpen(false)}
               >
