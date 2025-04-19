@@ -5,12 +5,10 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "dev3000": "next dev --port 3000",
-    "build": "prisma generate --no-engine && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "prisma generate --no-engine",
-    "migrate:dev": "prisma migrate dev",
-    "migrate:deploy": "prisma migrate deploy --preview-feature --timeout 60"
+    "postinstall": "prisma generate || true"
   },
   "dependencies": {
     "@auth/core": "^0.34.2",

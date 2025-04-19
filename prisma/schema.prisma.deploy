@@ -6,7 +6,11 @@ generator client {
   output   = "../app/generated/prisma"
 }
 
-// No datasource section to avoid connection attempts
+// Dummy datasource that won't actually connect to a database during build
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://dummy:dummy@localhost:5432/dummy?schema=public"
+}
 
 // Models definitions match the main schema
 model Account {
