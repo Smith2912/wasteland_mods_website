@@ -35,7 +35,7 @@ export default function Home() {
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
-      <section className="relative aspect-[16/9] md:aspect-[21/9] lg:aspect-auto lg:h-[600px] w-full">
+      <section className="relative h-[350px] sm:h-[400px] md:h-[500px] lg:h-[550px] xl:h-[600px] w-full">
         <RotatingHero />
         
         <div className="absolute inset-0 flex items-center z-20">

@@ -1,20 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
 
 const heroImages = [
   {
     src: '/DayzHero1.png',
-    alt: 'DayZ Apocalyptic Scene'
+    alt: 'DayZ Apocalyptic Scene',
+    position: 'center 15%' // Custom position for first image
   },
   {
     src: '/DayzHero2.png',
-    alt: 'DayZ Night Zombies'
+    alt: 'DayZ Night Zombies',
+    position: 'center 35%' // Custom position for second image
   },
   {
     src: '/DayzHero3.png',
-    alt: 'DayZ Night Sky'
+    alt: 'DayZ Night Sky',
+    position: 'center 40%' // Custom position for third image
   }
 ];
 
@@ -47,39 +49,35 @@ export default function RotatingHero() {
   }, []);
   
   return (
-    <div className="absolute inset-0 w-full h-full overflow-hidden">
-      {/* Dark overlay */}
-      <div className="absolute inset-0 bg-black/60 z-10" />
+    <div className="absolute inset-0 w-full h-full">
+      {/* Dark overlay for better text readability */}
+      <div className="absolute inset-0 bg-black/40 z-10" />
       
       {/* Current visible image */}
       <div 
-        className={`absolute inset-0 w-full h-full transition-opacity duration-1500 ${
+        className={`absolute inset-0 transition-opacity duration-1500 ${
           isTransitioning ? 'opacity-0' : 'opacity-100'
         }`}
       >
-        <Image
-          src={heroImages[currentImageIndex].src}
-          alt={heroImages[currentImageIndex].alt}
-          fill
-          sizes="100vw"
-          priority
-          quality={90}
-          style={{
-            objectFit: 'cover',
-            objectPosition: 'center 30%'
-          }}
-        />
+        <div className="w-full h-full">
+          <img
+            src={heroImages[currentImageIndex].src}
+            alt={heroImages[currentImageIndex].alt}
+            className="w-full h-full object-cover"
+            style={{
+              objectPosition: heroImages[currentImageIndex].position,
+            }}
+          />
+        </div>
       </div>
       
-      {/* Preload all images */}
+      {/* Preload all images for smoother transitions */}
       <div className="hidden">
         {heroImages.map((image) => (
-          <Image 
+          <img 
             key={image.src} 
             src={image.src} 
             alt="preload" 
-            width={1} 
-            height={1} 
           />
         ))}
       </div>
