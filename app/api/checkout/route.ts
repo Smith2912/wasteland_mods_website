@@ -1,51 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { savePurchase } from '@/app/lib/db';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
+
+// Create a direct Supabase client without the cookie middleware
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+);
 
 export async function POST(request: NextRequest) {
   try {
-    // Create a Supabase client for server-side authentication
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-      {
-        cookies: {
-          async get(name) {
-            const cookieStore = await cookies();
-            return cookieStore.get(name)?.value;
-          },
-          set(name, value, options) {
-            // We don't need to set cookies in this API route
-          },
-          remove(name, options) {
-            // We don't need to remove cookies in this API route
-          },
-        },
-      }
-    );
-    
-    // Get the session from both cookies and Authorization header
+    // Get the session from Authorization header
     let session;
+    let accessToken;
     
-    // First try to get from Authorization header (preferred)
+    // Get from Authorization header
     const authHeader = request.headers.get('Authorization');
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      const { data, error } = await supabase.auth.getUser(token);
+      accessToken = authHeader.substring(7);
+      console.log('Auth token received:', accessToken ? 'Valid token present' : 'No token');
       
-      if (!error && data?.user) {
-        session = { user: data.user };
-      } else {
-        console.error('Invalid token in Authorization header:', JSON.stringify(error));
-        throw new Error(`Authentication failed: ${error?.message || 'Invalid token'}`);
+      try {
+        const { data, error } = await supabase.auth.getUser(accessToken);
+        
+        if (error) {
+          console.error('Error validating token:', error.message);
+          throw new Error(`Authentication failed: ${error.message}`);
+        } else if (data?.user) {
+          session = { user: data.user };
+          console.log('Authenticated via token:', data.user.id);
+        }
+      } catch (error) {
+        console.error('Error processing auth token:', error);
+        throw new Error('Authentication failed: Could not validate token');
       }
-    }
-    
-    // If no session from header, fall back to cookies
-    if (!session) {
-      const { data } = await supabase.auth.getSession();
-      session = data.session;
+    } else {
+      console.error('No Authorization header found');
+      return NextResponse.json(
+        { error: 'Authentication required - No Authorization header' },
+        { status: 401 }
+      );
     }
     
     // Check if we have a valid user
@@ -106,10 +100,12 @@ export async function POST(request: NextRequest) {
     
     // Save the purchase to the database
     try {
+      // Pass the token to the savePurchase function
       const savedPurchase = await savePurchase(
         session.user.id,
         items,
-        transactionId
+        transactionId,
+        accessToken
       );
       
       return NextResponse.json({
@@ -135,7 +131,7 @@ export async function POST(request: NextRequest) {
     // Detailed error logging
     const errorDetails = error instanceof Error 
       ? { message: error.message, stack: error.stack }
-      : { raw: JSON.stringify(error) };
+      : { raw: typeof error === 'object' ? JSON.stringify(error) : String(error) };
       
     console.error('Error processing checkout:', errorDetails);
     

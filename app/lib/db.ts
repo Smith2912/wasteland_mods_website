@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { createClient } from '@supabase/supabase-js';
 
 export interface Purchase {
   id: string;
@@ -12,8 +13,32 @@ export interface Purchase {
 
 /**
  * Save a purchase to the database
+ * @param userId The authenticated user's ID
+ * @param items Array of items to purchase
+ * @param transactionId PayPal transaction ID
+ * @param accessToken Optional access token for auth
  */
-export async function savePurchase(userId: string, items: any[], transactionId: string) {
+export async function savePurchase(
+  userId: string, 
+  items: any[], 
+  transactionId: string, 
+  accessToken?: string
+) {
+  let db = supabase;
+  
+  // Use a direct client with the access token if provided
+  if (accessToken) {
+    const customClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!, 
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    await customClient.auth.setSession({ 
+      access_token: accessToken, 
+      refresh_token: '' 
+    });
+    db = customClient;
+  }
+
   try {
     // Validate inputs
     if (!userId) {
@@ -46,34 +71,37 @@ export async function savePurchase(userId: string, items: any[], transactionId: 
         id: items[0].id,
         price: items[0].price,
         title: items[0].title || 'N/A'
-      } : null
+      } : null,
+      authProvided: !!accessToken
     }));
 
     // Debug the exact data we're sending to the database
     console.log('Purchase data being inserted:', JSON.stringify(purchases));
 
-    // Verify the user is authenticated
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError) {
-      console.error('Auth error:', JSON.stringify(authError));
-      throw new Error(`Authentication failed: ${authError.message}`);
-    }
-    
-    if (!authData?.user) {
-      throw new Error('User not authenticated');
-    }
-    
-    // Check if the authenticated user matches the provided userId
-    if (authData.user.id !== userId) {
-      console.error(`User ID mismatch: provided=${userId}, authenticated=${authData.user.id}`);
-      throw new Error('User ID mismatch - cannot save purchase for another user');
+    // Verify the user is authenticated if no token was provided
+    if (!accessToken) {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        console.error('Auth error:', JSON.stringify(authError));
+        throw new Error(`Authentication failed: ${authError.message}`);
+      }
+      
+      if (!authData?.user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Check if the authenticated user matches the provided userId
+      if (authData.user.id !== userId) {
+        console.error(`User ID mismatch: provided=${userId}, authenticated=${authData.user.id}`);
+        throw new Error('User ID mismatch - cannot save purchase for another user');
+      }
     }
 
     // Now attempt the insert with a single purchase at a time to isolate issues
     let savedData = [];
     
     for (const purchase of purchases) {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('purchases')
         .insert([purchase])
         .select();
@@ -100,7 +128,7 @@ export async function savePurchase(userId: string, items: any[], transactionId: 
         }
         
         // Test permissions with a simple select query
-        const { error: selectError } = await supabase
+        const { error: selectError } = await db
           .from('purchases')
           .select('count(*)')
           .limit(1);

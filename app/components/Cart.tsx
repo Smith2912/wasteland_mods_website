@@ -114,23 +114,28 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
               setProcessing(true);
               setError(null);
               
-              // Refresh the session to get the latest token
-              const { data: authData, error: authError } = await supabase.auth.refreshSession();
-              
-              if (authError || !authData.session) {
-                throw new Error('Authentication error. Please log in again.');
-              }
-              
               // Capture the PayPal order (complete the payment)
               const order = await actions.order.capture();
               console.log('Order completed successfully', order);
+              
+              // Get a fresh access token to ensure it's valid
+              const { data: authData, error: authError } = await supabase.auth.getSession();
+              
+              if (authError || !authData.session) {
+                console.error('Session refresh error:', authError);
+                throw new Error('Authentication error. Please log in again.');
+              }
+              
+              // Set up request with auth headers
+              const accessToken = authData.session.access_token;
+              console.log('Using access token:', accessToken ? 'Valid token present' : 'No token');
               
               // Record the purchase using our API
               const response = await fetch('/api/checkout', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${authData.session.access_token}`
+                  'Authorization': `Bearer ${accessToken}`
                 },
                 body: JSON.stringify({
                   items,
@@ -140,8 +145,16 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
               });
               
               if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.error || 'Failed to record purchase');
+                // Attempt to get detailed error from response
+                let errorData;
+                try {
+                  errorData = await response.json();
+                } catch (e) {
+                  errorData = { error: 'Failed to record purchase' };
+                }
+                
+                console.error('Checkout API error:', errorData);
+                throw new Error(errorData.error || 'Failed to record purchase');
               }
               
               // Payment successful
