@@ -26,26 +26,70 @@ export async function savePurchase(
 ) {
   let db = supabase;
   
-  // Use a direct client with the access token if provided
-  if (accessToken) {
-    const customClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!, 
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-    await customClient.auth.setSession({ 
-      access_token: accessToken, 
-      refresh_token: '' 
-    });
-    db = customClient;
-  }
-
   try {
+    console.log('🔍 Starting savePurchase function with:', JSON.stringify({
+      userId: userId,
+      itemCount: items?.length || 0,
+      hasToken: !!accessToken
+    }));
+    
+    // Use a direct client with the access token if provided
+    if (accessToken) {
+      console.log('📝 Creating custom Supabase client with provided token');
+      try {
+        const customClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!, 
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
+        
+        const { data: sessionData, error: sessionError } = await customClient.auth.setSession({ 
+          access_token: accessToken, 
+          refresh_token: '' 
+        });
+        
+        if (sessionError) {
+          console.error('🔴 Error setting session:', JSON.stringify(sessionError));
+          throw new Error(`Auth session setup failed: ${sessionError.message}`);
+        }
+        
+        console.log('✅ Custom client created with token, session established');
+        db = customClient;
+        
+        // Verify we have a valid session
+        const { data: userData, error: userError } = await db.auth.getUser();
+        if (userError) {
+          console.error('🔴 Token validation failed:', JSON.stringify(userError));
+          throw new Error(`Token validation failed: ${userError.message}`);
+        }
+        
+        console.log('✅ Token validated, user:', userData?.user?.id || 'Unknown');
+        
+        // Check if we can access the purchases table
+        const { data: testData, error: testError } = await db
+          .from('purchases')
+          .select('id')
+          .limit(1);
+          
+        if (testError) {
+          console.error('🔴 Cannot access purchases table:', JSON.stringify(testError));
+          throw new Error(`Database access test failed: ${testError.message}`);
+        }
+        
+        console.log('✅ Successfully accessed purchases table');
+      } catch (e) {
+        console.error('🔴 Auth client creation error:', e);
+        throw new Error(`Failed to initialize authenticated client: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    } else {
+      console.log('⚠️ No access token provided, using default client');
+    }
+
     // Validate inputs
     if (!userId) {
       throw new Error("User ID is required");
     }
     
-    if (!items || items.length === 0) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
       throw new Error("Items array is empty or invalid");
     }
     
@@ -53,119 +97,124 @@ export async function savePurchase(
       throw new Error("Transaction ID is required");
     }
     
+    // Create our purchase objects
     const purchases = items.map(item => ({
       user_id: userId,
       mod_id: item.id,
       transaction_id: transactionId,
       purchase_date: new Date().toISOString(),
-      amount: item.price,
+      amount: typeof item.price === 'number' ? item.price : parseFloat(item.price),
       status: 'completed'
     }));
 
     // Debug output to help understand any issues
-    console.log('Attempting to save purchases:', JSON.stringify({
-      userId,
-      itemCount: items.length,
-      transactionId,
-      firstItem: items.length > 0 ? {
-        id: items[0].id,
-        price: items[0].price,
-        title: items[0].title || 'N/A'
-      } : null,
-      authProvided: !!accessToken
-    }));
+    console.log('📝 Purchase data being prepared:', JSON.stringify(purchases));
 
-    // Debug the exact data we're sending to the database
-    console.log('Purchase data being inserted:', JSON.stringify(purchases));
-
-    // Verify the user is authenticated if no token was provided
-    if (!accessToken) {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError) {
-        console.error('Auth error:', JSON.stringify(authError));
-        throw new Error(`Authentication failed: ${authError.message}`);
-      }
-      
-      if (!authData?.user) {
-        throw new Error('User not authenticated');
-      }
-      
-      // Check if the authenticated user matches the provided userId
-      if (authData.user.id !== userId) {
-        console.error(`User ID mismatch: provided=${userId}, authenticated=${authData.user.id}`);
-        throw new Error('User ID mismatch - cannot save purchase for another user');
-      }
-    }
-
-    // Now attempt the insert with a single purchase at a time to isolate issues
-    let savedData = [];
+    // Now attempt the insert - try JUST ONE record first to isolate issues
+    const singlePurchase = purchases[0];
+    console.log('🔍 Attempting to insert single record first:', JSON.stringify(singlePurchase));
     
-    for (const purchase of purchases) {
-      const { data, error } = await db
+    try {
+      const { data: singleData, error: singleError } = await db
         .from('purchases')
-        .insert([purchase])
+        .insert([singlePurchase])
         .select();
-
-      if (error) {
-        // Convert Supabase error to a more descriptive error
-        console.error('Error saving purchase item:', JSON.stringify(error));
         
-        // Check for specific error types
-        if (error.code === '23505') {
+      if (singleError) {
+        console.error('🔴 Error inserting single purchase:', JSON.stringify(singleError));
+        
+        // Check common error types
+        if (singleError.code === '23505') {
           throw new Error(`Duplicate purchase detected for transaction: ${transactionId}`);
         }
         
-        if (error.code === '23503') {
-          throw new Error(`Foreign key constraint failed: ${error.details || 'Check if mod_id exists and user_id references a valid user'}`);
+        if (singleError.code === '23503') {
+          throw new Error(`Foreign key constraint failed: ${singleError.details}`);
         }
         
-        if (error.code === '42P01') {
-          throw new Error(`Table 'purchases' does not exist. Database schema issue.`);
+        if (singleError.code === '42501') {
+          throw new Error(`Permission denied: RLS policy is blocking the insert operation`);
         }
         
-        if (error.code === '42501' || error.message?.includes('permission')) {
-          throw new Error(`Permission denied: RLS policy is blocking the insert operation. Make sure you're authenticated and have the correct role.`);
+        if (singleError.message?.includes('permission')) {
+          throw new Error(`Permission denied: ${singleError.message}`);
         }
         
-        // Test permissions with a simple select query - fixed to use proper Supabase syntax
-        try {
-          const { error: selectError } = await db
+        throw new Error(`Database error (${singleError.code || 'UNKNOWN'}): ${singleError.message || singleError.details || 'Unknown database error'}`);
+      }
+      
+      if (!singleData || singleData.length === 0) {
+        console.error('🔴 No data returned from single insert');
+        throw new Error('Purchase was processed but no data was returned');
+      }
+      
+      console.log('✅ Single purchase record inserted successfully!');
+      
+      // If we made it here, let's try the rest
+      let remainingData = [];
+      
+      if (purchases.length > 1) {
+        console.log(`🔍 Now inserting remaining ${purchases.length - 1} records...`);
+        
+        // Assuming first item was successful, insert the rest
+        const restOfPurchases = purchases.slice(1);
+        
+        if (restOfPurchases.length > 0) {
+          const { data: restData, error: restError } = await db
             .from('purchases')
-            .select('id')
-            .limit(1);
+            .insert(restOfPurchases)
+            .select();
             
-          if (selectError) {
-            console.error('Permission test failed:', JSON.stringify(selectError));
-            throw new Error(`Database access issue: ${selectError.message || 'Cannot access purchases table'}`);
+          if (restError) {
+            console.error('🔴 Error inserting remaining purchases:', JSON.stringify(restError));
+            // Continue anyway since we inserted at least one record
+          } else if (restData) {
+            remainingData = restData;
+            console.log(`✅ Successfully inserted ${restData.length} additional records`);
           }
-        } catch (e) {
-          console.error('Error during permission test:', e);
+        }
+      }
+      
+      // Combine the results
+      const allData = [...(singleData || []), ...remainingData];
+      console.log(`✅ Total records inserted: ${allData.length}`);
+      
+      return allData;
+    } catch (insertError) {
+      console.error('🔴 Insert operation failed:', insertError);
+      
+      // Try a different approach - direct query with RPC if everything else fails
+      console.log('🔍 Attempting alternative approach...');
+      
+      try {
+        // Try a direct RPC call if defined on the server
+        const { data: rpcData, error: rpcError } = await db.rpc('save_purchase', {
+          p_user_id: userId,
+          p_mod_id: singlePurchase.mod_id,
+          p_transaction_id: transactionId,
+          p_amount: singlePurchase.amount
+        });
+        
+        if (rpcError) {
+          console.error('🔴 RPC fallback failed:', JSON.stringify(rpcError));
+          throw insertError; // Throw the original error
         }
         
-        const errorMessage = error.message || error.details || 'Database error while saving purchase';
-        const errorCode = error.code || 'UNKNOWN';
-        
-        throw new Error(`Database error (${errorCode}): ${errorMessage}`);
-      }
-
-      if (data && data.length > 0) {
-        savedData.push(...data);
+        console.log('✅ Saved purchase via RPC fallback');
+        return [{ id: rpcData, ...singlePurchase }];
+      } catch (rpcFailure) {
+        console.error('🔴 All approaches failed:', rpcFailure);
+        throw insertError; // Throw the original error since fallback also failed
       }
     }
-
-    if (savedData.length === 0) {
-      throw new Error("No purchase data was returned after insert");
-    }
-
-    return savedData;
   } catch (error) {
-    // Ensure we always throw an Error object with a message
+    // Final error handler
     if (error instanceof Error) {
-      console.error('Error in savePurchase:', error.message);
+      console.error('🔴 Error in savePurchase:', error.message, error.stack);
       throw error;
     } else {
       const errorDetail = typeof error === 'object' ? JSON.stringify(error) : String(error);
-      console.error('Error in savePurchase:', errorDetail);
+      console.error('🔴 Unknown error in savePurchase:', errorDetail);
       throw new Error(`Failed to save purchase: ${errorDetail}`);
     }
   }

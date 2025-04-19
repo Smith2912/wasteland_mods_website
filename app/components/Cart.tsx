@@ -138,8 +138,27 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                   'Authorization': `Bearer ${accessToken}`
                 },
                 body: JSON.stringify({
-                  items,
-                  transactionId: order.id
+                  items: items.map(item => ({
+                    id: item.id,
+                    price: item.price,
+                    title: item.title || 'Unknown Item',
+                    // Add any other fields that might be useful for debugging
+                  })),
+                  transactionId: order.id,
+                  orderDetails: {
+                    status: order.status,
+                    createTime: order.create_time,
+                    updateTime: order.update_time,
+                    payerId: order.payer?.payer_id
+                  },
+                  debug: {
+                    timestamp: new Date().toISOString(),
+                    clientInfo: {
+                      userAgent: navigator.userAgent,
+                      language: navigator.language,
+                      platform: navigator.platform
+                    }
+                  }
                 }),
                 credentials: 'include'
               });
