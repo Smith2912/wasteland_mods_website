@@ -83,6 +83,9 @@ Prisma.NullTypes = {
  * Enums
  */
 exports.Prisma.TransactionIsolationLevel = makeStrictEnum({
+  ReadUncommitted: 'ReadUncommitted',
+  ReadCommitted: 'ReadCommitted',
+  RepeatableRead: 'RepeatableRead',
   Serializable: 'Serializable'
 });
 
@@ -148,6 +151,11 @@ exports.Prisma.SortOrder = {
   desc: 'desc'
 };
 
+exports.Prisma.QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+};
+
 exports.Prisma.NullsOrder = {
   first: 'first',
   last: 'last'
@@ -191,7 +199,8 @@ const config = {
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
-    "rootEnvPath": null
+    "rootEnvPath": null,
+    "schemaEnvPath": "../../../.env"
   },
   "relativePath": "../../../prisma",
   "clientVersion": "6.6.0",
@@ -199,17 +208,17 @@ const config = {
   "datasourceNames": [
     "db"
   ],
-  "activeProvider": "sqlite",
+  "activeProvider": "postgresql",
   "inlineDatasources": {
     "db": {
       "url": {
         "fromEnvVar": "DATABASE_URL",
-        "value": "file:./dev.db"
+        "value": "postgresql://postgres:072091Agj8333@db.iixdecdgdwdfugqpsxjf.supabase.co:5432/postgres"
       }
     }
   },
-  "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\n// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?\n// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init\n\ngenerator client {\n  provider = \"prisma-client-js\"\n  output   = \"../app/generated/prisma\"\n}\n\ndatasource db {\n  provider = \"sqlite\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel Account {\n  id                String  @id @default(cuid())\n  userId            String\n  type              String\n  provider          String\n  providerAccountId String\n  refresh_token     String?\n  access_token      String?\n  expires_at        Int?\n  token_type        String?\n  scope             String?\n  id_token          String?\n  session_state     String?\n  steamId           String?\n\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@unique([provider, providerAccountId])\n}\n\nmodel Session {\n  id           String   @id @default(cuid())\n  sessionToken String   @unique\n  userId       String\n  expires      DateTime\n  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)\n}\n\nmodel User {\n  id            String     @id @default(cuid())\n  name          String?\n  email         String?    @unique\n  emailVerified DateTime?\n  image         String?\n  steamId       String?    @unique\n  accounts      Account[]\n  sessions      Session[]\n  purchases     Purchase[]\n}\n\nmodel VerificationToken {\n  identifier String\n  token      String   @unique\n  expires    DateTime\n\n  @@unique([identifier, token])\n}\n\n// Additional models for our application\n\nmodel Mod {\n  id          String     @id @default(cuid())\n  title       String\n  description String\n  price       Float\n  imageUrl    String?\n  category    String\n  createdAt   DateTime   @default(now())\n  updatedAt   DateTime   @updatedAt\n  purchases   Purchase[]\n}\n\nmodel Purchase {\n  id           String   @id @default(cuid())\n  userId       String\n  modId        String\n  purchaseDate DateTime @default(now())\n  active       Boolean  @default(true)\n  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)\n  mod          Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)\n\n  @@unique([userId, modId])\n}\n",
-  "inlineSchemaHash": "e26df3596048377ccae7a85636e24074fc03b23ebf1b04fafa348446b01c93db",
+  "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\n// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?\n// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init\n\ngenerator client {\n  provider = \"prisma-client-js\"\n  output   = \"../app/generated/prisma\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel Account {\n  id                String  @id @default(cuid())\n  userId            String\n  type              String\n  provider          String\n  providerAccountId String\n  refresh_token     String?\n  access_token      String?\n  expires_at        Int?\n  token_type        String?\n  scope             String?\n  id_token          String?\n  session_state     String?\n  steamId           String?\n\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@unique([provider, providerAccountId])\n}\n\nmodel Session {\n  id           String   @id @default(cuid())\n  sessionToken String   @unique\n  userId       String\n  expires      DateTime\n  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)\n}\n\nmodel User {\n  id            String     @id @default(cuid())\n  name          String?\n  email         String?    @unique\n  emailVerified DateTime?\n  image         String?\n  steamId       String?    @unique\n  accounts      Account[]\n  sessions      Session[]\n  purchases     Purchase[]\n}\n\nmodel VerificationToken {\n  identifier String\n  token      String   @unique\n  expires    DateTime\n\n  @@unique([identifier, token])\n}\n\n// Additional models for our application\n\nmodel Mod {\n  id          String     @id @default(cuid())\n  title       String\n  description String\n  price       Float\n  imageUrl    String?\n  category    String\n  createdAt   DateTime   @default(now())\n  updatedAt   DateTime   @updatedAt\n  purchases   Purchase[]\n}\n\nmodel Purchase {\n  id           String   @id @default(cuid())\n  userId       String\n  modId        String\n  purchaseDate DateTime @default(now())\n  active       Boolean  @default(true)\n  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)\n  mod          Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)\n\n  @@unique([userId, modId])\n}\n",
+  "inlineSchemaHash": "bce6f9b0fea1832b0282aa8a56f074263dc9a9a619aada6310274dfc9a5d471a",
   "copyEngine": true
 }
 config.dirname = '/'
