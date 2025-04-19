@@ -20,12 +20,15 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   const { session, isLoading } = useAuth();
   const paypalContainerRef = useRef<HTMLDivElement>(null);
   const paypalButtonsRendered = useRef(false);
+  const renderAttempts = useRef(0);
+  const maxRenderAttempts = 5;
 
   const handleSignIn = () => {
     onClose();
     router.push('/auth/signin?callbackUrl=/');
   };
 
+  // Load PayPal script when cart is opened
   useEffect(() => {
     if (isOpen && !paypalLoaded && items.length > 0 && session) {
       const loadPayPalScript = async () => {
@@ -47,9 +50,11 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
     // Reset the rendered state when cart is closed
     if (!isOpen) {
       paypalButtonsRendered.current = false;
+      renderAttempts.current = 0;
     }
   }, [isOpen, paypalLoaded, items.length, session]);
 
+  // Render PayPal buttons when everything is ready
   useEffect(() => {
     // Only proceed if all conditions are met
     if (!paypalLoaded || items.length === 0 || !window.paypal || !session || !isOpen) {
@@ -60,20 +65,37 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
     if (paypalButtonsRendered.current) {
       return;
     }
+
+    // Check if we've exceeded max attempts
+    if (renderAttempts.current >= maxRenderAttempts) {
+      console.error('Max render attempts exceeded for PayPal buttons');
+      setError('Unable to initialize payment system. Please refresh and try again.');
+      return;
+    }
     
-    // Wait a bit to ensure the container is in the DOM
-    const renderTimer = setTimeout(() => {
+    // Increment render attempt counter
+    renderAttempts.current += 1;
+    
+    // Function to render PayPal buttons
+    const renderPayPalButtons = () => {
       // Check if the container exists before rendering
-      const container = paypalContainerRef.current;
+      const container = document.getElementById('paypal-button-container');
       if (!container) {
-        console.error('PayPal container element not found');
+        console.error(`PayPal container not found (attempt ${renderAttempts.current})`);
+        
+        // Schedule another attempt if we haven't exceeded the max
+        if (renderAttempts.current < maxRenderAttempts) {
+          setTimeout(renderPayPalButtons, 200 * renderAttempts.current); // Increasing delay with each attempt
+        } else {
+          setError('Payment system initialization failed. Please refresh the page.');
+        }
         return;
       }
       
-      // Clear previous PayPal buttons if they exist
-      container.innerHTML = '';
-      
       try {
+        // Clear previous PayPal buttons if they exist
+        container.innerHTML = '';
+        
         // @ts-ignore - PayPal types aren't available
         window.paypal.Buttons({
           createOrder: (_data: any, actions: any) => {
@@ -145,13 +167,16 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
         
         // Mark as rendered to prevent duplicate renders
         paypalButtonsRendered.current = true;
+        console.log('PayPal buttons rendered successfully');
       } catch (err) {
         console.error('Failed to render PayPal buttons:', err);
         setError('There was a problem setting up the payment system. Please try again later.');
       }
-    }, 100); // Short delay to ensure DOM is ready
+    };
     
-    return () => clearTimeout(renderTimer);
+    // Initial render attempt with a small delay
+    setTimeout(renderPayPalButtons, 100);
+    
   }, [paypalLoaded, items, items.length, total, clearCart, router, session, isOpen]);
 
   if (!isOpen) return null;
@@ -246,7 +271,7 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                         <span>Processing payment...</span>
                       </div>
                     ) : (
-                      <div ref={paypalContainerRef} className="mt-4"></div>
+                      <div id="paypal-button-container" className="mt-4"></div>
                     )}
                     
                     <div className="mt-4 text-center text-sm text-zinc-500">
