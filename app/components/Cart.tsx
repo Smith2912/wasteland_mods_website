@@ -9,6 +9,8 @@ import { useRouter } from 'next/navigation';
 export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { items, removeFromCart, clearCart, getCartTotal } = useCart();
   const [paypalLoaded, setPaypalLoaded] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const total = getCartTotal();
 
@@ -23,6 +25,7 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
           setPaypalLoaded(true);
         } catch (error) {
           console.error('Failed to load PayPal JS SDK:', error);
+          setError('Failed to load payment system. Please try again later.');
         }
       };
       
@@ -53,21 +56,44 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
         },
         onApprove: async (_data: any, actions: any) => {
           try {
+            setProcessing(true);
+            setError(null);
+            
+            // Capture the PayPal order (complete the payment)
             const order = await actions.order.capture();
             console.log('Order completed successfully', order);
             
-            // Handle successful payment
-            // You would typically call your API here to record the purchase
+            // Record the purchase using our API
+            const response = await fetch('/api/checkout', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                items,
+                transactionId: order.id
+              }),
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+              throw new Error(result.error || 'Failed to record purchase');
+            }
             
             // Clear cart and redirect to success page
             clearCart();
             router.push('/checkout/success');
           } catch (error) {
             console.error('Failed to complete order:', error);
+            setError('There was a problem processing your payment. Please try again.');
+            setProcessing(false);
           }
         },
         onError: (err: any) => {
           console.error('PayPal error:', err);
+          setError('Payment failed. Please try again or use a different payment method.');
+          setProcessing(false);
         }
       }).render('#paypal-button-container');
     }
@@ -143,7 +169,20 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                   </div>
                   
                   <div className="mt-6">
-                    <div id="paypal-button-container" className="mt-4"></div>
+                    {error && (
+                      <div className="bg-red-900/50 border border-red-700 text-white p-3 rounded-md mb-4">
+                        <p className="text-sm">{error}</p>
+                      </div>
+                    )}
+                    
+                    {processing ? (
+                      <div className="flex items-center justify-center py-4">
+                        <div className="h-6 w-6 border-2 border-t-green-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mr-2"></div>
+                        <span>Processing payment...</span>
+                      </div>
+                    ) : (
+                      <div id="paypal-button-container" className="mt-4"></div>
+                    )}
                     
                     <div className="mt-4 text-center text-sm text-zinc-500">
                       <p>Secure payment processed by PayPal</p>

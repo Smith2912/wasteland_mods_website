@@ -6,67 +6,94 @@ import Link from "next/link";
 import ModCard from "../components/ModCard";
 import { supabase } from "../lib/supabase";
 import { User } from "@supabase/supabase-js";
+import { getUserPurchases } from "../lib/db";
 
-// Mock data for all mods
-const allMods = [
-  {
+interface ModDetails {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  imageUrl: string;
+  category: string;
+  downloadUrl: string;
+  version: string;
+}
+
+interface PurchasedMod extends ModDetails {
+  purchaseDate: string;
+  transactionId: string;
+}
+
+// Map of all available mods with details
+const modsMap: Record<string, ModDetails> = {
+  "vehicle-protection": {
     id: "vehicle-protection",
     title: "Vehicle Protection System",
     description: "Protect vehicles from damage in PvE environments. Configure damage from zombies, animals, and players independently.",
     price: 19.99,
     imageUrl: "/images/mods/vehicle-protection.jpg",
-    category: "Vehicles"
+    category: "Vehicles",
+    downloadUrl: "/downloads/vehicle-protection.zip",
+    version: "1.0.2"
   },
-  {
+  "advanced-zombies": {
     id: "advanced-zombies",
     title: "Advanced Zombie System",
     description: "Enhanced zombie AI with configurable hordes, special infected types, and unique behaviors.",
     price: 24.99,
     imageUrl: "/images/mods/zombies.jpg",
-    category: "AI"
+    category: "AI",
+    downloadUrl: "/downloads/advanced-zombies.zip",
+    version: "2.1.0"
   },
-  {
+  "weather-system": {
     id: "weather-system",
     title: "Dynamic Weather System",
     description: "Realistic weather patterns with visual effects, temperature impact, and seasonal changes.",
     price: 14.99,
     imageUrl: "/images/mods/weather.jpg",
-    category: "Environment"
+    category: "Environment",
+    downloadUrl: "/downloads/weather-system.zip",
+    version: "1.3.5"
   },
-  {
+  "trader-plus": {
     id: "trader-plus",
     title: "Advanced Trader Framework",
     description: "Comprehensive trading system with customizable trader locations, inventory, and pricing.",
     price: 29.99,
     imageUrl: "/images/mods/trader.jpg",
-    category: "Economy"
+    category: "Economy",
+    downloadUrl: "/downloads/trader-plus.zip",
+    version: "3.0.1"
   },
-  {
+  "base-building": {
     id: "base-building",
     title: "Enhanced Base Building",
     description: "Advanced base building features with new structures, fortifications, and territorial systems.",
     price: 24.99,
     imageUrl: "/images/mods/base-building.jpg",
-    category: "Building"
+    category: "Building",
+    downloadUrl: "/downloads/base-building.zip",
+    version: "2.2.3"
   },
-  {
+  "vehicle-pack": {
     id: "vehicle-pack",
     title: "Expanded Vehicle Pack",
     description: "Collection of new and enhanced vehicles with custom handling, models, and storage capacity.",
     price: 19.99,
     imageUrl: "/images/mods/vehicles.jpg",
-    category: "Vehicles"
+    category: "Vehicles",
+    downloadUrl: "/downloads/vehicle-pack.zip",
+    version: "1.7.0"
   }
-];
-
-// All possible categories
-const categories = ["All", "Vehicles", "AI", "Environment", "Economy", "Building"];
+};
 
 export default function ModsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [steamLinked, setSteamLinked] = useState(false);
   const [steamUsername, setSteamUsername] = useState<string | null>(null);
+  const [purchasedMods, setPurchasedMods] = useState<PurchasedMod[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -85,6 +112,30 @@ export default function ModsPage() {
       if (steamId) {
         setSteamLinked(true);
         setSteamUsername(session.user.user_metadata.steamUsername || null);
+        
+        // Fetch user's purchased mods
+        try {
+          const purchases = await getUserPurchases(session.user.id);
+          
+          // Map purchases to mods with full details
+          const purchasedModsWithDetails = purchases
+            .map(purchase => {
+              const modDetails = modsMap[purchase.mod_id];
+              if (modDetails) {
+                return {
+                  ...modDetails,
+                  purchaseDate: new Date(purchase.purchase_date).toLocaleDateString(),
+                  transactionId: purchase.transaction_id
+                };
+              }
+              return null;
+            })
+            .filter(mod => mod !== null) as PurchasedMod[];
+          
+          setPurchasedMods(purchasedModsWithDetails);
+        } catch (error) {
+          console.error('Error fetching purchased mods:', error);
+        }
       }
       
       setLoading(false);
@@ -95,6 +146,15 @@ export default function ModsPage() {
 
   const handleSteamLink = () => {
     router.push('/api/auth/steam');
+  };
+
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   };
 
   if (loading) {
@@ -174,14 +234,48 @@ export default function ModsPage() {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* This would be populated with the user's purchased mods */}
-        <div className="bg-zinc-800 rounded-lg p-6 flex flex-col">
-          <h3 className="text-xl font-bold mb-2">No Mods Yet</h3>
-          <p className="text-zinc-400 mb-4">You haven't purchased any premium mods yet.</p>
-          <Link href="/store" className="mt-auto py-2 px-4 bg-green-600 hover:bg-green-700 rounded-md text-center transition-colors">
-            Browse Store
-          </Link>
-        </div>
+        {purchasedMods.length > 0 ? (
+          purchasedMods.map((mod) => (
+            <div key={mod.id} className="bg-zinc-800 rounded-lg overflow-hidden flex flex-col">
+              <div className="h-48 bg-zinc-700 relative">
+                {mod.imageUrl && (
+                  <img 
+                    src={mod.imageUrl} 
+                    alt={mod.title} 
+                    className="w-full h-full object-cover"
+                  />
+                )}
+                <div className="absolute top-2 right-2 bg-green-600 text-xs font-bold px-2 py-1 rounded">
+                  v{mod.version}
+                </div>
+              </div>
+              <div className="p-6 flex-grow">
+                <h3 className="text-xl font-bold mb-2">{mod.title}</h3>
+                <p className="text-zinc-400 mb-4 text-sm">{mod.description}</p>
+                <div className="text-sm text-zinc-500 mb-3">
+                  <p>Purchased: {mod.purchaseDate}</p>
+                </div>
+              </div>
+              <div className="p-4 pt-0 mt-auto">
+                <a 
+                  href={mod.downloadUrl}
+                  className="w-full block text-center py-2 px-4 bg-green-600 hover:bg-green-700 rounded-md transition-colors"
+                  download
+                >
+                  Download
+                </a>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="bg-zinc-800 rounded-lg p-6 flex flex-col col-span-full">
+            <h3 className="text-xl font-bold mb-2">No Mods Yet</h3>
+            <p className="text-zinc-400 mb-4">You haven't purchased any premium mods yet.</p>
+            <Link href="/store" className="mt-auto py-2 px-4 bg-green-600 hover:bg-green-700 rounded-md text-center transition-colors self-start">
+              Browse Store
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );
