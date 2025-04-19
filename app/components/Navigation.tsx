@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import AuthButton from './AuthButton';
 
 export default function Navigation() {
   const pathname = usePathname();
@@ -45,7 +46,7 @@ export default function Navigation() {
         </div>
         
         {/* Desktop navigation */}
-        <div className="hidden md:flex space-x-6">
+        <div className="hidden md:flex md:items-center space-x-6">
           {navItems.map((item) => (
             <Link
               key={item.path}
@@ -57,12 +58,7 @@ export default function Navigation() {
               {item.name}
             </Link>
           ))}
-          <Link
-            href="/auth/login"
-            className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-md transition-colors"
-          >
-            Login
-          </Link>
+          <AuthButton />
         </div>
       </div>
       
@@ -82,13 +78,9 @@ export default function Navigation() {
                 {item.name}
               </Link>
             ))}
-            <Link
-              href="/auth/login"
-              className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-md transition-colors text-center"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Login
-            </Link>
+            <div onClick={() => setIsMenuOpen(false)}>
+              <AuthButton />
+            </div>
           </div>
         </div>
       )}
