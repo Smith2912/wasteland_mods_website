@@ -29,8 +29,8 @@ export default function Navigation() {
           <Image 
             src="/NewWastelandModsLogoDiscord.png" 
             alt="Wasteland Mods Logo" 
-            width={150} 
-            height={150} 
+            width={350} 
+            height={350} 
             className="h-auto" 
             priority
           />
