@@ -65,14 +65,12 @@ export async function savePurchase(
       }
     );
     
-    console.log('📊 Using RPC function for reliable purchase insertion');
+    // Given the RPC failures, let's temporarily use the direct insert method
+    console.log('⚠️ Using direct insert method due to RPC issues');
     
-    let allResults = [];
-    let errors = [];
-    
-    // Process each item using the database function for better reliability
-    for (const item of items) {
-      // Validate the item
+    // Create the purchase objects
+    const purchases = items.map(item => {
+      // Validate each item has an id
       if (!item.id) {
         throw new Error(`Item missing required id field: ${JSON.stringify(item)}`);
       }
@@ -90,111 +88,71 @@ export async function savePurchase(
         throw new Error(`Missing or invalid price for item ${item.id}`);
       }
       
-      // Call the database function for this item
-      console.log(`🔄 Processing item ${item.id} with price ${price}`);
-      
-      const { data, error } = await serviceClient.rpc('save_purchase', {
-        p_user_id: userId,
-        p_mod_id: item.id,
-        p_transaction_id: transactionId,
-        p_amount: price,
-        p_status: 'completed'
-      });
-      
+      return {
+        user_id: userId,
+        mod_id: item.id,
+        transaction_id: transactionId,
+        purchase_date: new Date().toISOString(),
+        amount: price,
+        status: 'completed'
+      };
+    });
+    
+    // Debug output to help understand any issues
+    console.log('📝 Purchase data being prepared:', JSON.stringify(purchases));
+    
+    // Direct approach with service role client
+    try {
+      // Try inserting directly with all records
+      console.log('🔒 Using service client to insert all records');
+      const { data, error } = await serviceClient
+        .from('purchases')
+        .insert(purchases)
+        .select();
+        
       if (error) {
-        console.error(`🔴 Error saving item ${item.id}:`, JSON.stringify(error));
-        errors.push(error);
-        continue;
+        console.error('🔴 Insert error:', JSON.stringify(error));
+        throw new Error(`Database error (${error.code || 'UNKNOWN'}): ${error.message || error.details || JSON.stringify(error)}`);
       }
       
-      if (data && data.success) {
-        console.log(`✅ Successfully saved item ${item.id}: ${data.message || 'Purchase saved'}`);
-        if (data.purchase_id) {
-          // Format of the result changed slightly
-          allResults.push({
-            id: data.purchase_id,
-            user_id: userId,
-            mod_id: item.id,
-            transaction_id: transactionId,
-            purchase_date: new Date().toISOString(),
-            amount: price,
-            status: 'completed'
-          });
-        } else if (data.purchase) {
-          allResults.push(data.purchase);
-        }
-      } else {
-        console.warn(`⚠️ Item ${item.id} saved but with warning: ${data?.message || 'Unknown result'}`);
-        if (data?.purchase_id) {
-          allResults.push({
-            id: data.purchase_id,
-            user_id: userId,
-            mod_id: item.id,
-            transaction_id: transactionId,
-            purchase_date: new Date().toISOString(),
-            amount: price,
-            status: 'completed'
-          });
-        } else if (data?.purchase) {
-          allResults.push(data.purchase);
-        }
-      }
-    }
-    
-    // Check if we have at least some successes
-    if (allResults.length > 0) {
-      console.log(`✅ Successfully saved ${allResults.length} out of ${items.length} purchases`);
-      return allResults;
-    }
-    
-    // If no successes at all, try our fallback methods
-    if (errors.length > 0) {
-      // Attempt to insert using traditional method as fallback
-      console.log('⚠️ RPC method failed, attempting traditional insert fallback...');
+      console.log(`✅ Successfully inserted ${data?.length || 0} records`);
+      return data || [];
+    } catch (insertError) {
+      console.error('🔴 Insert failed:', insertError);
       
-      // Create the purchase objects
-      const purchases = items.map(item => {
-        // Ensure price is a valid number
-        let price = 0;
-        if (typeof item.price === 'number') {
-          price = item.price;
-        } else if (typeof item.price === 'string') {
-          price = parseFloat(item.price);
-          if (isNaN(price)) {
-            throw new Error(`Invalid price format for item ${item.id}: ${item.price}`);
+      // Try one-by-one as last resort
+      console.log('🔍 Attempting one-by-one insert as last resort...');
+      
+      const savedItems = [];
+      let hasSucceeded = false;
+      
+      // Try inserting one by one as a last resort
+      for (const purchase of purchases) {
+        try {
+          const { data: itemData, error: itemError } = await serviceClient
+            .from('purchases')
+            .insert([purchase])
+            .select();
+            
+          if (itemError) {
+            console.error(`🔴 Failed to insert item ${purchase.mod_id}:`, JSON.stringify(itemError));
+          } else if (itemData && itemData.length > 0) {
+            console.log(`✅ Successfully inserted item: ${purchase.mod_id}`);
+            savedItems.push(...itemData);
+            hasSucceeded = true;
           }
+        } catch (singleError) {
+          console.error(`🔴 Error on item ${purchase.mod_id}:`, singleError);
         }
-        
-        return {
-          user_id: userId,
-          mod_id: item.id,
-          transaction_id: transactionId,
-          purchase_date: new Date().toISOString(),
-          amount: price,
-          status: 'completed'
-        };
-      });
-      
-      try {
-        // Try inserting directly
-        const { data, error } = await serviceClient
-          .from('purchases')
-          .insert(purchases)
-          .select();
-          
-        if (error) {
-          throw new Error(`Database error (${error.code || 'UNKNOWN'}): ${error.message || error.details || JSON.stringify(error)}`);
-        }
-        
-        console.log(`✅ Fallback succeeded - inserted ${data?.length || 0} records`);
-        return data || [];
-      } catch (fallbackError) {
-        console.error('🔴 Both primary and fallback methods failed:', fallbackError);
-        throw new Error(`Failed to save purchases after multiple attempts: ${errors[0]?.message || 'Database error (UNKNOWN): Unknown database error'}`);
       }
+      
+      if (hasSucceeded) {
+        console.log(`✅ Salvaged ${savedItems.length} purchase records using fallback method`);
+        return savedItems;
+      }
+      
+      throw new Error(`Failed to save purchases after multiple attempts: ${insertError instanceof Error ? insertError.message : JSON.stringify(insertError)}`);
     }
-    
-    throw new Error('Failed to save purchases: Unknown error occurred');
   } catch (error) {
     // Final error handler
     if (error instanceof Error) {
