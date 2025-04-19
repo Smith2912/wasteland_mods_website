@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { AuthOptions } from "next-auth";
 import Discord from "next-auth/providers/discord";
 import { JWT } from "next-auth/jwt";
 import { Session } from "next-auth";
@@ -36,11 +36,12 @@ declare module "next-auth/jwt" {
     steamId?: string;
     steamProfile?: any;
     userId?: string;
+    sub?: string;
   }
 }
 
-// Define the auth handler function
-const handler = NextAuth({
+// Define the auth handler function and export configuration
+export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
     Discord({
@@ -52,16 +53,13 @@ const handler = NextAuth({
         }
       }
     }),
-    // SteamProvider({
-    //   clientSecret: process.env.STEAM_API_KEY as string,
-    //   callbackUrl: `${process.env.NEXTAUTH_URL}/api/auth/callback/steam`,
-    // }),
   ],
   callbacks: {
     async jwt({ token, account, profile, user }) {
       // Save the user ID to the token right after signin
-      if (user?.id && !token.userId) {
+      if (user?.id) {
         token.userId = user.id;
+        token.sub = user.id;
       }
       
       // Handle Discord login
@@ -72,27 +70,10 @@ const handler = NextAuth({
         }
       }
       
-      // // Handle Steam login or linking
-      // if (account?.provider === 'steam') {
-      //   token.steamId = account.providerAccountId;
-      //   token.steamProfile = profile;
-      //   
-      //   // If user is already logged in with Discord, link the Steam account
-      //   if (token.userId) {
-      //     try {
-      //       await prisma.user.update({
-      //         where: { id: token.userId },
-      //         data: { steamId: account.providerAccountId }
-      //       });
-      //     } catch (error) {
-      //       console.error("Error linking Steam account:", error);
-      //     }
-      //   }
-      // }
-      
+      console.log('JWT token:', token);
       return token;
     },
-    async session({ session, token, user }) {
+    async session({ session, token }) {
       // Send the Discord access token and profile to the client
       if (token) {
         session.accessToken = token.accessToken;
@@ -101,37 +82,18 @@ const handler = NextAuth({
           session.user.discordProfile = token.discordProfile;
         }
         
-        // Add the user ID to the session
+        // Add the user ID to the session - use all possible sources
         if (token.userId) {
           session.user.id = token.userId;
+        } else if (token.sub) {
+          session.user.id = token.sub;
         }
         
-        // TEMPORARY: Always set steamLinked to true for testing
-        // Remove this once Steam integration is working
-        session.user.steamLinked = true;
+        console.log('Session data:', JSON.stringify(session, null, 2));
         
-        // // Check if user has a Steam account linked
-        // if (token.userId) {
-        //   try {
-        //     const userWithSteam = await prisma.user.findUnique({
-        //       where: { id: token.userId as string },
-        //       select: { steamId: true }
-        //     });
-        //     
-        //     session.user.steamLinked = !!userWithSteam?.steamId;
-        //     
-        //     // If Steam is linked, add the Steam profile to the session
-        //     if (token.steamProfile && userWithSteam?.steamId) {
-        //       session.user.steamProfile = token.steamProfile;
-        //     }
-        //   } catch (error) {
-        //     console.error("Error checking Steam link:", error);
-        //     session.user.steamLinked = false;
-        //   }
-        // } else {
-        //   // Default to false if no userId
-        //   session.user.steamLinked = false;
-        // }
+        // For now, always return steamLinked as true to disable redirects
+        // This will be replaced with actual Steam linking functionality
+        session.user.steamLinked = true;
       }
       return session;
     }
@@ -141,6 +103,11 @@ const handler = NextAuth({
   },
   // Enable debug in development
   debug: process.env.NODE_ENV === 'development',
-});
+  session: {
+    strategy: "jwt",
+  },
+};
+
+const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST }; 

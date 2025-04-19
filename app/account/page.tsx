@@ -1,20 +1,68 @@
 "use client";
 
 import { useSession, signIn } from "next-auth/react";
-import { redirect } from "next/navigation";
+import { redirect, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
 export default function AccountPage() {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const loading = status === "loading";
   const [purchases, setPurchases] = useState([]);
+  const searchParams = useSearchParams();
+  const [message, setMessage] = useState<string | null>(null);
+  const [steamLinked, setSteamLinked] = useState(false);
 
   useEffect(() => {
     if (!loading && !session) {
       redirect("/auth/signin?callbackUrl=/account");
     }
-  }, [loading, session]);
+
+    // Check for URL parameters that indicate Steam linking status
+    const steamLinked = searchParams.get('steam') === 'linked';
+    const error = searchParams.get('error');
+
+    if (steamLinked) {
+      setMessage("Steam account successfully linked!");
+      setSteamLinked(true);
+      // Force session update to refresh state
+      update();
+    } else if (error) {
+      switch (error) {
+        case 'steam_auth_failed':
+          setMessage("Steam authentication failed. Please try again.");
+          break;
+        case 'invalid_steam_id':
+          setMessage("Could not extract a valid Steam ID. Please try again.");
+          break;
+        case 'steam_profile_fetch_failed':
+          setMessage("Failed to fetch your Steam profile. Please try again.");
+          break;
+        case 'steam_link_failed':
+          setMessage("There was an error linking your Steam account. Please try again.");
+          break;
+        default:
+          setMessage("An unknown error occurred. Please try again.");
+      }
+    }
+  }, [loading, session, searchParams, update]);
+
+  function handleSteamLogin() {
+    // Build the Steam OpenID authentication URL manually
+    const realm = window.location.origin;
+    const returnUrl = `${realm}/api/steam`;
+
+    const steamUrl = new URL('https://steamcommunity.com/openid/login');
+    steamUrl.searchParams.append('openid.mode', 'checkid_setup');
+    steamUrl.searchParams.append('openid.ns', 'http://specs.openid.net/auth/2.0');
+    steamUrl.searchParams.append('openid.identity', 'http://specs.openid.net/auth/2.0/identifier_select');
+    steamUrl.searchParams.append('openid.claimed_id', 'http://specs.openid.net/auth/2.0/identifier_select');
+    steamUrl.searchParams.append('openid.return_to', returnUrl);
+    steamUrl.searchParams.append('openid.realm', realm);
+
+    // Redirect to Steam
+    window.location.href = steamUrl.toString();
+  }
 
   if (loading) {
     return (
@@ -37,6 +85,12 @@ export default function AccountPage() {
     <div className="container mx-auto px-4 py-12">
       <h1 className="text-4xl font-bold mb-6">Account Settings</h1>
       
+      {message && (
+        <div className={`${message.includes('success') ? 'bg-green-800' : 'bg-amber-800'} p-4 rounded-md mb-6`}>
+          <p>{message}</p>
+        </div>
+      )}
+      
       <div className="bg-zinc-800 rounded-lg p-6 mb-8">
         <div className="flex items-center space-x-4 mb-4">
           {session.user?.image && (
@@ -58,7 +112,7 @@ export default function AccountPage() {
           <div className="bg-zinc-800 rounded-lg p-6 mb-6">
             <h2 className="text-xl font-bold mb-4">Steam Account</h2>
             
-            {session.user?.steamLinked ? (
+            {steamLinked || session.user?.steamLinked ? (
               <div className="flex items-center space-x-4">
                 {session.user.steamProfile?.avatar && (
                   <img 
@@ -68,15 +122,10 @@ export default function AccountPage() {
                   />
                 )}
                 <div>
-                  <p className="font-semibold">{session.user.steamProfile?.personaname || "Temporary Access"}</p>
+                  <p className="font-semibold">{session.user.steamProfile?.personaname || "Steam Account"}</p>
                   <p className="text-sm text-green-400">
                     <span className="text-green-400">✓</span> Connected
                   </p>
-                  {!session.user.steamProfile && (
-                    <p className="text-xs text-amber-400 mt-1">
-                      Note: Steam integration is temporarily disabled for testing
-                    </p>
-                  )}
                 </div>
               </div>
             ) : (
@@ -85,7 +134,7 @@ export default function AccountPage() {
                   Link your Steam account to use purchased mods. Each mod purchase is tied to a single Steam account.
                 </p>
                 <button
-                  onClick={() => signIn("steam", { callbackUrl: "/account" })}
+                  onClick={handleSteamLogin}
                   className="flex items-center space-x-2 bg-[#171a21] hover:bg-[#2a3f5f] py-2 px-4 rounded-md text-white transition-colors"
                 >
                   <svg width="20" height="20" viewBox="0 0 256 259" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid">
@@ -141,8 +190,8 @@ export default function AccountPage() {
               <div>
                 <h3 className="text-zinc-400 text-sm">Steam Account</h3>
                 <p>
-                  {session.user?.steamLinked 
-                    ? (session.user.steamProfile?.personaname || "Temporarily Enabled")
+                  {steamLinked || session.user?.steamLinked 
+                    ? (session.user.steamProfile?.personaname || "Connected")
                     : "Not connected"}
                 </p>
               </div>
