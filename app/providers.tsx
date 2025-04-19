@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { Session } from "@supabase/supabase-js";
+import { CartProvider } from './context/CartContext';
 
 // Create a context for the Supabase session
 const AuthContext = createContext<{
@@ -45,7 +46,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ session, isLoading }}>
-      {children}
+      <CartProvider>
+        {children}
+      </CartProvider>
     </AuthContext.Provider>
   );
 } 

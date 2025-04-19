@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import AuthButton from './AuthButton';
+import CartButton from './CartButton';
 
 export default function Navigation() {
   const pathname = usePathname();
@@ -53,7 +54,8 @@ export default function Navigation() {
                 {item.name}
               </Link>
             ))}
-            <div className="absolute right-4">
+            <div className="absolute right-4 flex items-center space-x-3">
+              <CartButton />
               <AuthButton />
             </div>
           </div>
