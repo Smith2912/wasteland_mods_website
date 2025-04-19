@@ -1,9 +1,18 @@
 "use client";
 
 import React from 'react';
-import { useCart } from '../context/CartContext';
+import { useCart, CartItem } from '../context/CartContext';
 
-const storeMods = [
+interface ModItem {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  imageUrl: string;
+  category?: string;
+}
+
+const storeMods: ModItem[] = [
   {
     id: "vehicle-protection",
     title: "Vehicle Protection System",
@@ -51,7 +60,7 @@ const storeMods = [
 export default function StorePage() {
   const { addToCart, isInCart } = useCart();
 
-  const handleAddToCart = (mod: any) => {
+  const handleAddToCart = (mod: ModItem) => {
     addToCart({
       id: mod.id,
       title: mod.title,

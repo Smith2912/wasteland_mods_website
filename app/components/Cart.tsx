@@ -17,7 +17,7 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       const loadPayPalScript = async () => {
         try {
           await loadScript({ 
-            'client-id': process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || 'sb', 
+            clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || 'sb', 
             currency: 'USD'
           });
           setPaypalLoaded(true);
@@ -31,10 +31,16 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   }, [isOpen, paypalLoaded, items.length]);
 
   useEffect(() => {
-    if (paypalLoaded && items.length > 0) {
-      // @ts-ignore
+    // Clear previous PayPal buttons if they exist
+    const container = document.getElementById('paypal-button-container');
+    if (container) {
+      container.innerHTML = '';
+    }
+    
+    if (paypalLoaded && items.length > 0 && window.paypal) {
+      // @ts-ignore - PayPal types aren't available
       window.paypal.Buttons({
-        createOrder: (data: any, actions: any) => {
+        createOrder: (_data: any, actions: any) => {
           return actions.order.create({
             purchase_units: [{
               amount: {
@@ -45,16 +51,20 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
             }]
           });
         },
-        onApprove: async (data: any, actions: any) => {
-          const order = await actions.order.capture();
-          console.log('Order completed successfully', order);
-          
-          // Handle successful payment
-          // You would typically call your API here to record the purchase
-          
-          // Clear cart and redirect to success page
-          clearCart();
-          router.push('/checkout/success');
+        onApprove: async (_data: any, actions: any) => {
+          try {
+            const order = await actions.order.capture();
+            console.log('Order completed successfully', order);
+            
+            // Handle successful payment
+            // You would typically call your API here to record the purchase
+            
+            // Clear cart and redirect to success page
+            clearCart();
+            router.push('/checkout/success');
+          } catch (error) {
+            console.error('Failed to complete order:', error);
+          }
         },
         onError: (err: any) => {
           console.error('PayPal error:', err);
