@@ -41,28 +41,91 @@ export async function savePurchase(userId: string, items: any[], transactionId: 
     console.log('Attempting to save purchases:', JSON.stringify({
       userId,
       itemCount: items.length,
-      transactionId
+      transactionId,
+      firstItem: items.length > 0 ? {
+        id: items[0].id,
+        price: items[0].price,
+        title: items[0].title || 'N/A'
+      } : null
     }));
 
-    const { data, error } = await supabase
-      .from('purchases')
-      .insert(purchases)
-      .select();
+    // Debug the exact data we're sending to the database
+    console.log('Purchase data being inserted:', JSON.stringify(purchases));
 
-    if (error) {
-      // Convert Supabase error to a more descriptive error
-      console.error('Error saving purchase:', JSON.stringify(error));
-      const errorMessage = error.message || error.details || 'Database error while saving purchase';
-      const errorCode = error.code || 'UNKNOWN';
-      
-      throw new Error(`Database error (${errorCode}): ${errorMessage}`);
+    // Verify the user is authenticated
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) {
+      console.error('Auth error:', JSON.stringify(authError));
+      throw new Error(`Authentication failed: ${authError.message}`);
+    }
+    
+    if (!authData?.user) {
+      throw new Error('User not authenticated');
+    }
+    
+    // Check if the authenticated user matches the provided userId
+    if (authData.user.id !== userId) {
+      console.error(`User ID mismatch: provided=${userId}, authenticated=${authData.user.id}`);
+      throw new Error('User ID mismatch - cannot save purchase for another user');
     }
 
-    if (!data) {
-      throw new Error("Purchase was saved but no data was returned");
+    // Now attempt the insert with a single purchase at a time to isolate issues
+    let savedData = [];
+    
+    for (const purchase of purchases) {
+      const { data, error } = await supabase
+        .from('purchases')
+        .insert([purchase])
+        .select();
+
+      if (error) {
+        // Convert Supabase error to a more descriptive error
+        console.error('Error saving purchase item:', JSON.stringify(error));
+        
+        // Check for specific error types
+        if (error.code === '23505') {
+          throw new Error(`Duplicate purchase detected for transaction: ${transactionId}`);
+        }
+        
+        if (error.code === '23503') {
+          throw new Error(`Foreign key constraint failed: ${error.details || 'Check if mod_id exists and user_id references a valid user'}`);
+        }
+        
+        if (error.code === '42P01') {
+          throw new Error(`Table 'purchases' does not exist. Database schema issue.`);
+        }
+        
+        if (error.code === '42501' || error.message?.includes('permission')) {
+          throw new Error(`Permission denied: RLS policy is blocking the insert operation. Make sure you're authenticated and have the correct role.`);
+        }
+        
+        // Test permissions with a simple select query
+        const { error: selectError } = await supabase
+          .from('purchases')
+          .select('count(*)')
+          .limit(1);
+          
+        if (selectError) {
+          console.error('Permission test failed:', JSON.stringify(selectError));
+          throw new Error(`Database access issue: ${selectError.message || 'Cannot access purchases table'}`);
+        }
+        
+        const errorMessage = error.message || error.details || 'Database error while saving purchase';
+        const errorCode = error.code || 'UNKNOWN';
+        
+        throw new Error(`Database error (${errorCode}): ${errorMessage}`);
+      }
+
+      if (data && data.length > 0) {
+        savedData.push(...data);
+      }
     }
 
-    return data;
+    if (savedData.length === 0) {
+      throw new Error("No purchase data was returned after insert");
+    }
+
+    return savedData;
   } catch (error) {
     // Ensure we always throw an Error object with a message
     if (error instanceof Error) {
