@@ -1,10 +1,11 @@
 "use client";
 
-import { useSession, signIn } from "next-auth/react";
-import { redirect } from "next/navigation";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ModCard from "../components/ModCard";
+import { supabase } from "../lib/supabase";
+import { User } from "@supabase/supabase-js";
 
 // Mock data for all mods
 const allMods = [
@@ -62,14 +63,39 @@ const allMods = [
 const categories = ["All", "Vehicles", "AI", "Environment", "Economy", "Building"];
 
 export default function ModsPage() {
-  const { data: session, status } = useSession();
-  const loading = status === "loading";
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [steamLinked, setSteamLinked] = useState(false);
+  const [steamUsername, setSteamUsername] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !session) {
-      redirect("/auth/signin?callbackUrl=/mods");
-    }
-  }, [loading, session]);
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user) {
+        router.push('/auth/signin?callbackUrl=/mods');
+        return;
+      }
+      
+      setUser(session.user);
+      
+      // Check if user has Steam linked
+      const steamId = session.user.user_metadata?.steamId;
+      if (steamId) {
+        setSteamLinked(true);
+        setSteamUsername(session.user.user_metadata.steamUsername || null);
+      }
+      
+      setLoading(false);
+    };
+    
+    getUser();
+  }, [router]);
+
+  const handleSteamLink = () => {
+    router.push('/api/auth/steam');
+  };
 
   if (loading) {
     return (
@@ -84,12 +110,12 @@ export default function ModsPage() {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return null; // This will never render because of the redirect
   }
 
   // If the user hasn't linked their Steam account yet, show a message
-  if (!session.user?.steamLinked) {
+  if (!steamLinked) {
     return (
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-2xl mx-auto bg-zinc-800 rounded-lg p-8 text-center">
@@ -101,7 +127,7 @@ export default function ModsPage() {
           </p>
           <div className="mb-8">
             <button
-              onClick={() => signIn("steam", { callbackUrl: "/mods" })}
+              onClick={handleSteamLink}
               className="inline-flex items-center space-x-2 bg-[#171a21] hover:bg-[#2a3f5f] py-3 px-6 rounded-md text-white transition-colors"
             >
               <svg width="24" height="24" viewBox="0 0 256 259" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid">
@@ -124,16 +150,16 @@ export default function ModsPage() {
       
       <div className="bg-zinc-800 rounded-lg p-6 mb-8">
         <div className="flex items-center space-x-4 mb-4">
-          {session.user?.image && (
+          {user.user_metadata?.avatar_url && (
             <img 
-              src={session.user.image} 
-              alt={session.user?.name || "User"} 
+              src={user.user_metadata.avatar_url} 
+              alt={user.user_metadata?.full_name || "User"} 
               className="w-12 h-12 rounded-full"
             />
           )}
           <div>
-            <h2 className="text-xl font-bold">{session.user?.name}</h2>
-            <p className="text-zinc-400">{session.user?.email}</p>
+            <h2 className="text-xl font-bold">{user.user_metadata?.full_name || user.email}</h2>
+            <p className="text-zinc-400">{user.email}</p>
           </div>
         </div>
         
@@ -142,7 +168,7 @@ export default function ModsPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
           <p>
-            <span className="font-semibold">Steam Account Linked:</span> {session.user.steamProfile?.personaname || "Temporary Access Granted"}
+            <span className="font-semibold">Steam Account Linked:</span> {steamUsername || "Temporary Access Granted"}
           </p>
         </div>
       </div>

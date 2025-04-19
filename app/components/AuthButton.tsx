@@ -1,14 +1,52 @@
 "use client";
 
-import React, { useState } from 'react';
-import { signIn, signOut, useSession } from "next-auth/react";
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { User } from '@supabase/supabase-js';
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from 'next/navigation';
 
 export default function AuthButton() {
-  const { data: session, status } = useSession();
-  const loading = status === "loading";
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      setLoading(false);
+      
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        (_event, session) => {
+          setUser(session?.user ?? null);
+        }
+      );
+      
+      return () => {
+        subscription.unsubscribe();
+      };
+    };
+    
+    getUser();
+  }, []);
+
+  const handleSignIn = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'discord',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setDropdownOpen(false);
+    router.refresh();
+  };
 
   if (loading) {
     return (
@@ -21,23 +59,23 @@ export default function AuthButton() {
     );
   }
 
-  if (session) {
+  if (user) {
     return (
       <div className="relative">
         <button 
           onClick={() => setDropdownOpen(!dropdownOpen)} 
           className="flex items-center gap-2 px-4 py-2 rounded-md bg-green-600 hover:bg-green-700 transition-colors"
         >
-          {session.user?.image && (
+          {user.user_metadata?.avatar_url && (
             <Image 
-              src={session.user.image}
+              src={user.user_metadata.avatar_url}
               alt="Profile" 
               className="w-6 h-6 rounded-full"
               width={24}
               height={24}
             />
           )}
-          {session.user?.name || 'User'}
+          {user.user_metadata?.full_name || user.email || 'User'}
         </button>
         
         {dropdownOpen && (
@@ -50,7 +88,7 @@ export default function AuthButton() {
                 My Mods
               </Link>
               <button
-                onClick={() => signOut()}
+                onClick={handleSignOut}
                 className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-zinc-700"
               >
                 Sign out
@@ -64,7 +102,7 @@ export default function AuthButton() {
 
   return (
     <button
-      onClick={() => signIn('discord')}
+      onClick={handleSignIn}
       className="px-4 py-2 rounded-md bg-[#5865F2] hover:bg-[#4752c4] transition-colors"
     >
       Sign in with Discord
