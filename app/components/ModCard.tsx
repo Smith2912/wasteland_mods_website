@@ -1,5 +1,5 @@
-import Image from 'next/image';
 import Link from 'next/link';
+import WatermarkedImage from './WatermarkedImage';
 
 interface ModCardProps {
   id: string;
@@ -14,12 +14,17 @@ export default function ModCard({ id, title, description, price, imageUrl, categ
   return (
     <div className="bg-zinc-900 rounded-lg overflow-hidden shadow-lg transition-transform hover:scale-[1.01] border border-red-900 rugged-container">
       <div className="relative h-48 w-full">
-        <Image
+        <WatermarkedImage
           src={imageUrl}
           alt={title}
           fill
           className="object-cover"
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          watermarkPosition="bottomRight"
+          watermarkSize="small"
+          watermarkText="Wasteland Mods"
+          watermarkOpacity={0.6}
+          watermarkColor="rgba(255, 255, 255, 0.9)"
         />
         <div className="absolute top-2 right-2 bg-red-800 text-white text-sm px-2 py-1 rounded">
           {category}

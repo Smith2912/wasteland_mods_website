@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import WatermarkedImage from "../components/WatermarkedImage";
 
 export default function AboutPage() {
   return (
@@ -9,12 +9,16 @@ export default function AboutPage() {
           <h1 className="text-4xl font-bold mb-6 text-center">About Wasteland Mods</h1>
           
           <div className="relative w-full h-64 md:h-80 mb-8 rounded-lg overflow-hidden">
-            <Image
+            <WatermarkedImage
               src="/images/about-banner.jpg"
               alt="DayZ Wasteland Team"
               fill
               className="object-cover"
               sizes="(max-width: 768px) 100vw, 50vw"
+              watermarkPosition="bottomRight"
+              watermarkSize="medium"
+              watermarkOpacity={0.5}
+              watermarkColor="rgba(255, 255, 255, 0.8)"
             />
           </div>
           

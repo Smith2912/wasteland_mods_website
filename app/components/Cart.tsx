@@ -5,17 +5,27 @@ import Image from 'next/image';
 import { useCart } from '../context/CartContext';
 import { loadScript } from '@paypal/paypal-js';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../providers';
+import { supabase } from '../lib/supabase';
+import Link from 'next/link';
 
 export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { items, removeFromCart, clearCart, getCartTotal } = useCart();
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paymentSuccessful, setPaymentSuccessful] = useState(false);
   const router = useRouter();
   const total = getCartTotal();
+  const { session, isLoading } = useAuth();
+
+  const handleSignIn = () => {
+    onClose();
+    router.push('/auth/signin?callbackUrl=/');
+  };
 
   useEffect(() => {
-    if (isOpen && !paypalLoaded && items.length > 0) {
+    if (isOpen && !paypalLoaded && items.length > 0 && session) {
       const loadPayPalScript = async () => {
         try {
           await loadScript({ 
@@ -31,7 +41,7 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       
       loadPayPalScript();
     }
-  }, [isOpen, paypalLoaded, items.length]);
+  }, [isOpen, paypalLoaded, items.length, session]);
 
   useEffect(() => {
     // Clear previous PayPal buttons if they exist
@@ -40,7 +50,7 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       container.innerHTML = '';
     }
     
-    if (paypalLoaded && items.length > 0 && window.paypal) {
+    if (paypalLoaded && items.length > 0 && window.paypal && session) {
       // @ts-ignore - PayPal types aren't available
       window.paypal.Buttons({
         createOrder: (_data: any, actions: any) => {
@@ -59,6 +69,13 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
             setProcessing(true);
             setError(null);
             
+            // Refresh the session to get the latest token
+            const { data: authData, error: authError } = await supabase.auth.refreshSession();
+            
+            if (authError || !authData.session) {
+              throw new Error('Authentication error. Please log in again.');
+            }
+            
             // Capture the PayPal order (complete the payment)
             const order = await actions.order.capture();
             console.log('Order completed successfully', order);
@@ -68,25 +85,31 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authData.session.access_token}`
               },
               body: JSON.stringify({
                 items,
                 transactionId: order.id
               }),
+              credentials: 'include'
             });
             
-            const result = await response.json();
-            
             if (!response.ok) {
+              const result = await response.json();
               throw new Error(result.error || 'Failed to record purchase');
             }
+            
+            // Payment successful
+            setPaymentSuccessful(true);
             
             // Clear cart and redirect to success page
             clearCart();
             router.push('/checkout/success');
           } catch (error) {
             console.error('Failed to complete order:', error);
-            setError('There was a problem processing your payment. Please try again.');
+            setError(typeof error === 'object' && error !== null && 'message' in error 
+              ? (error as Error).message 
+              : 'There was a problem processing your payment. Please try again.');
             setProcessing(false);
           }
         },
@@ -97,7 +120,7 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
         }
       }).render('#paypal-button-container');
     }
-  }, [paypalLoaded, items, total, clearCart, router]);
+  }, [paypalLoaded, items, total, clearCart, router, session]);
 
   if (!isOpen) return null;
 
@@ -175,7 +198,17 @@ export default function Cart({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                       </div>
                     )}
                     
-                    {processing ? (
+                    {!session && !isLoading ? (
+                      <div className="bg-zinc-800 p-4 rounded-md mb-4 text-center">
+                        <p className="mb-3">You need to sign in before checking out</p>
+                        <button 
+                          onClick={handleSignIn}
+                          className="bg-[#5865F2] hover:bg-[#4752c4] px-4 py-2 rounded-md transition-colors"
+                        >
+                          Sign In to Continue
+                        </button>
+                      </div>
+                    ) : processing ? (
                       <div className="flex items-center justify-center py-4">
                         <div className="h-6 w-6 border-2 border-t-green-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mr-2"></div>
                         <span>Processing payment...</span>

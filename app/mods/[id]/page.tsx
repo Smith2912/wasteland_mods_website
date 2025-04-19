@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import WatermarkedImage from '../../components/WatermarkedImage';
 
 // Define types
 interface ModData {
@@ -190,12 +190,16 @@ export default function ModDetailPage() {
           <div className="lg:col-span-1">
             <div className="bg-zinc-800 rounded-lg overflow-hidden shadow-lg">
               <div className="relative h-64 w-full">
-                <Image
+                <WatermarkedImage
                   src={mod.imageUrl}
                   alt={mod.title}
                   fill
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, 33vw"
+                  watermarkPosition="center"
+                  watermarkSize="medium"
+                  watermarkOpacity={0.4}
+                  watermarkColor="rgba(255, 255, 255, 0.9)"
                 />
                 <div className="absolute top-2 right-2 bg-green-600 text-white text-sm px-2 py-1 rounded">
                   {mod.category}

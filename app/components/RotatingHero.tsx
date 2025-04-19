@@ -59,7 +59,7 @@ export default function RotatingHero() {
           isTransitioning ? 'opacity-0' : 'opacity-100'
         }`}
       >
-        <div className="w-full h-full">
+        <div className="w-full h-full relative">
           <img
             src={heroImages[currentImageIndex].src}
             alt={heroImages[currentImageIndex].alt}
@@ -68,6 +68,22 @@ export default function RotatingHero() {
               objectPosition: heroImages[currentImageIndex].position,
             }}
           />
+          
+          {/* Watermark overlay */}
+          <div 
+            className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"
+            style={{ opacity: 0.2 }}
+          >
+            <div 
+              className="text-white font-bold text-4xl md:text-5xl lg:text-6xl whitespace-nowrap"
+              style={{ 
+                transform: 'rotate(-30deg)',
+                textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)'
+              }}
+            >
+              Wasteland Mods
+            </div>
+          </div>
         </div>
       </div>
       
