@@ -1,10 +1,25 @@
 import NextAuth, { AuthOptions } from "next-auth";
 import Discord from "next-auth/providers/discord";
-import { JWT } from "next-auth/jwt";
-import { Session } from "next-auth";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { PrismaClient } from "../../../generated/prisma";
-import { NextRequest } from "next/server";
+
+// Define a custom Profile type for better type safety
+interface DiscordProfile {
+  id: string;
+  username: string;
+  avatar: string;
+  discriminator: string;
+  email: string;
+  verified: boolean;
+  [key: string]: unknown;
+}
+
+interface SteamProfile {
+  steamid: string;
+  personaname?: string;
+  avatarfull?: string;
+  [key: string]: unknown;
+}
 
 const prisma = new PrismaClient();
 
@@ -17,24 +32,24 @@ declare module "next-auth" {
       name?: string | null;
       email?: string | null;
       image?: string | null;
-      discordProfile?: any;
-      steamProfile?: any;
+      discordProfile?: DiscordProfile;
+      steamProfile?: SteamProfile;
       steamLinked?: boolean;
     }
   }
   
   interface User {
     steamId?: string;
-    steamProfile?: any;
+    steamProfile?: SteamProfile;
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     accessToken?: string;
-    discordProfile?: any;
+    discordProfile?: DiscordProfile;
     steamId?: string;
-    steamProfile?: any;
+    steamProfile?: SteamProfile;
     userId?: string;
     sub?: string;
   }
@@ -66,7 +81,7 @@ export const authOptions: AuthOptions = {
       if (account?.provider === 'discord') {
         token.accessToken = account.access_token;
         if (profile) {
-          token.discordProfile = profile;
+          token.discordProfile = profile as DiscordProfile;
         }
       }
       

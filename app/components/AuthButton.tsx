@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { signIn, signOut, useSession } from "next-auth/react";
-import Image from "next/image";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function AuthButton() {
   const { data: session, status } = useSession();
@@ -29,10 +29,12 @@ export default function AuthButton() {
           className="flex items-center gap-2 px-4 py-2 rounded-md bg-green-600 hover:bg-green-700 transition-colors"
         >
           {session.user?.image && (
-            <img 
+            <Image 
               src={session.user.image}
               alt="Profile" 
               className="w-6 h-6 rounded-full"
+              width={24}
+              height={24}
             />
           )}
           {session.user?.name || 'User'}

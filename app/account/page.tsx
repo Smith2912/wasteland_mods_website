@@ -1,14 +1,31 @@
 "use client";
 
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { redirect, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
-export default function AccountPage() {
+interface Purchase {
+  id: string;
+  mod: {
+    title: string;
+    price: number;
+  };
+  purchaseDate: string;
+}
+
+interface SteamProfile {
+  avatar?: string;
+  personaname?: string;
+  [key: string]: unknown;
+}
+
+// This component will use useSearchParams which requires Suspense
+function AccountContent() {
   const { data: session, status, update } = useSession();
   const loading = status === "loading";
-  const [purchases, setPurchases] = useState([]);
+  const [purchases] = useState<Purchase[]>([]);
   const searchParams = useSearchParams();
   const [message, setMessage] = useState<string | null>(null);
   const [steamLinked, setSteamLinked] = useState(false);
@@ -20,15 +37,15 @@ export default function AccountPage() {
 
     // Check for URL parameters that indicate Steam linking status
     const steamLinked = searchParams.get('steam') === 'linked';
-    const error = searchParams.get('error');
+    const errorParam = searchParams.get('error');
 
     if (steamLinked) {
       setMessage("Steam account successfully linked!");
       setSteamLinked(true);
       // Force session update to refresh state
       update();
-    } else if (error) {
-      switch (error) {
+    } else if (errorParam) {
+      switch (errorParam) {
         case 'steam_auth_failed':
           setMessage("Steam authentication failed. Please try again.");
           break;
@@ -81,6 +98,9 @@ export default function AccountPage() {
     return null; // This will never render because of the redirect
   }
 
+  // Cast the steamProfile to our interface to help TypeScript
+  const steamProfile = session.user?.steamProfile as SteamProfile | undefined;
+
   return (
     <div className="container mx-auto px-4 py-12">
       <h1 className="text-4xl font-bold mb-6">Account Settings</h1>
@@ -94,10 +114,12 @@ export default function AccountPage() {
       <div className="bg-zinc-800 rounded-lg p-6 mb-8">
         <div className="flex items-center space-x-4 mb-4">
           {session.user?.image && (
-            <img 
+            <Image 
               src={session.user.image} 
               alt={session.user?.name || "User"} 
               className="w-16 h-16 rounded-full"
+              width={64}
+              height={64}
             />
           )}
           <div>
@@ -114,15 +136,17 @@ export default function AccountPage() {
             
             {steamLinked || session.user?.steamLinked ? (
               <div className="flex items-center space-x-4">
-                {session.user.steamProfile?.avatar && (
-                  <img 
-                    src={session.user.steamProfile.avatar} 
+                {steamProfile?.avatar && (
+                  <Image 
+                    src={steamProfile.avatar} 
                     alt="Steam Avatar" 
                     className="w-12 h-12 rounded-full"
+                    width={48}
+                    height={48}
                   />
                 )}
                 <div>
-                  <p className="font-semibold">{session.user.steamProfile?.personaname || "Steam Account"}</p>
+                  <p className="font-semibold">{steamProfile?.personaname || "Steam Account"}</p>
                   <p className="text-sm text-green-400">
                     <span className="text-green-400">✓</span> Connected
                   </p>
@@ -151,7 +175,7 @@ export default function AccountPage() {
             
             {purchases.length > 0 ? (
               <div className="divide-y divide-zinc-700">
-                {purchases.map((purchase: any) => (
+                {purchases.map((purchase) => (
                   <div key={purchase.id} className="py-4">
                     <h3 className="font-semibold">{purchase.mod.title}</h3>
                     <p className="text-green-400">${purchase.mod.price}</p>
@@ -191,7 +215,7 @@ export default function AccountPage() {
                 <h3 className="text-zinc-400 text-sm">Steam Account</h3>
                 <p>
                   {steamLinked || session.user?.steamLinked 
-                    ? (session.user.steamProfile?.personaname || "Connected")
+                    ? (steamProfile?.personaname || "Connected")
                     : "Not connected"}
                 </p>
               </div>
@@ -208,5 +232,28 @@ export default function AccountPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Loading fallback for Suspense
+function AccountLoading() {
+  return (
+    <div className="container mx-auto px-4 py-12">
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="h-12 w-12 border-4 border-t-green-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mx-auto"></div>
+          <h2 className="text-xl mt-4">Loading...</h2>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main component with Suspense boundary
+export default function AccountPage() {
+  return (
+    <Suspense fallback={<AccountLoading />}>
+      <AccountContent />
+    </Suspense>
   );
 } 

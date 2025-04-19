@@ -51,7 +51,7 @@ export default function ContactPage() {
               <h2 className="text-2xl font-bold mb-4">Get In Touch</h2>
               <p className="text-zinc-300 mb-6">
                 Have questions about our mods or need support with your purchase? 
-                We're here to help! Fill out the form and we'll get back to you as soon as possible.
+                We&apos;re here to help! Fill out the form and we&apos;ll get back to you as soon as possible.
               </p>
               
               <div className="flex items-center gap-4 mb-4">
@@ -156,8 +156,8 @@ export default function ContactPage() {
                 </button>
                 
                 {formStatus === 'success' && (
-                  <div className="mt-4 p-3 bg-green-700/50 border border-green-600 rounded-md text-center">
-                    Your message has been sent successfully. We'll get back to you soon!
+                  <div className="mt-4 p-3 bg-green-800/50 border border-green-600 rounded text-green-400">
+                    Your message has been sent successfully. We&apos;ll get back to you soon!
                   </div>
                 )}
                 

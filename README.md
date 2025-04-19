@@ -1,85 +1,80 @@
-# Wasteland Mods - DayZ Mods E-commerce Website
+# Wasteland Mods Website
 
-A modern, responsive website for showcasing and selling DayZ mods.
+A Next.js 15 application for selling and managing DayZ mods.
 
 ## Features
 
-- Responsive design optimized for all devices
-- Modern UI with Tailwind CSS
-- Mod showcase and detail pages
-- Contact form for inquiries
-- User authentication (login/register) 
-- Mod purchase functionality
+- User authentication via Discord and Steam
+- Mod browsing and purchasing
+- User account management
+- Steam account linking for mod access
 
-## Tech Stack
-
-- [Next.js](https://nextjs.org/) - React framework
-- [React](https://reactjs.org/) - UI library
-- [TypeScript](https://www.typescriptlang.org/) - Type-safe JavaScript
-- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
-
-## Getting Started
+## Development
 
 ### Prerequisites
 
-- Node.js 14.6.0 or newer
-- npm or yarn
+- Node.js 18.17 or later
+- npm 9.6.7 or later
 
-### Installation
+### Getting Started
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/wasteland-mods.git
-cd wasteland-mods
-```
-
-2. Install dependencies:
-```bash
+# Install dependencies
 npm install
-# or
-yarn install
-```
 
-3. Run the development server:
-```bash
+# Start development server
 npm run dev
-# or
-yarn dev
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit [http://localhost:3000](http://localhost:3000) to see the application.
 
-## Project Structure
+### Environment Variables
 
-- `/app` - Next.js App Router directory
-  - `/components` - Reusable UI components
-  - `/mods` - Mods pages
-  - `/about` - About page
-  - `/contact` - Contact page
-  - `/auth` - Authentication pages
-  - `/dashboard` - User dashboard (to be implemented)
+Create a `.env.local` file in the root directory with the following variables:
 
-## Deployment
+```
+# Next Auth
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-nextauth-secret
 
-This project can be easily deployed on [Vercel](https://vercel.com/) or any platform that supports Next.js.
+# Discord OAuth
+DISCORD_CLIENT_ID=your-discord-client-id
+DISCORD_CLIENT_SECRET=your-discord-client-secret
 
-### Deploy on Vercel
+# Steam Authentication
+STEAM_API_KEY=your-steam-api-key
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new).
+# Database
+DATABASE_URL=your-database-url
+```
 
-## Future Improvements
+## Building for Production
 
-- Add proper backend integration for authentication
-- Implement payment gateway integration (Stripe, PayPal)
-- Add admin dashboard for managing mods
-- Implement user reviews and ratings
-- Build mod download functionality for purchased items
+```bash
+# Generate production build
+npm run build
 
-## License
+# Start production server
+npm start
+```
 
-This project is licensed under the MIT License.
+## Code Structure
 
-## Credits
+- `/app`: Next.js App Router pages and components
+- `/app/api`: API routes (Next.js Route Handlers)
+- `/app/components`: Reusable UI components
+- `/app/generated`: Generated Prisma client
+- `/public`: Static assets
 
-- Created by [Your Name]
-- Images sourced from [source] (replace with actual source if using external images)
+## Authentication Flow
+
+This application uses NextAuth.js for authentication with Discord and a custom OpenID flow for Steam authentication:
+
+1. Users sign in with Discord OAuth
+2. Steam authentication is handled via OpenID and a custom API route
+3. Both accounts are linked in the database
+
+## Important Notes
+
+- The application requires Suspense boundaries around components that use `useSearchParams()` hook from Next.js
+- ESLint and TypeScript type checking are disabled during production builds in `next.config.ts`

@@ -32,7 +32,7 @@ export default function AboutPage() {
             </p>
             <p>
               What started as personal projects quickly gained attention from other server owners
-              who were impressed with our work. Today, we're proud to offer our growing collection
+              who were impressed with our work. Today, we&apos;re proud to offer our growing collection
               of premium mods to the DayZ community.
             </p>
             
@@ -72,9 +72,9 @@ export default function AboutPage() {
             
             <h2>Get in Touch</h2>
             <p>
-              We're always happy to hear from fellow DayZ enthusiasts and server owners. Whether
+              We&apos;re always happy to hear from fellow DayZ enthusiasts and server owners. Whether
               you have questions about our mods, need technical support, or want to discuss custom
-              development work, we're here to help.
+              development work, we&apos;re here to help.
             </p>
             
             <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center">
