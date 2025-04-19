@@ -5,9 +5,10 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "dev3000": "next dev --port 3000",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@auth/core": "^0.34.2",

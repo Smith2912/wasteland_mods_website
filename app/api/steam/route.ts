@@ -2,10 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { PrismaClient } from '../../generated/prisma';
+import { prisma } from '../../lib/prisma';
 import { authOptions } from '../auth/[...nextauth]/route';
-
-const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
   try {

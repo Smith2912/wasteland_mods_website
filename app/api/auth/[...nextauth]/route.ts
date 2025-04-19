@@ -1,7 +1,7 @@
 import NextAuth, { AuthOptions } from "next-auth";
 import Discord from "next-auth/providers/discord";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { PrismaClient } from "../../../generated/prisma";
+import { prisma } from "../../../lib/prisma";
 
 // Define a custom Profile type for better type safety
 interface DiscordProfile {
@@ -20,8 +20,6 @@ interface SteamProfile {
   avatarfull?: string;
   [key: string]: unknown;
 }
-
-const prisma = new PrismaClient();
 
 // Extend the built-in types
 declare module "next-auth" {
