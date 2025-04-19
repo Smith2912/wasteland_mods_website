@@ -15,6 +15,19 @@ export interface Purchase {
  */
 export async function savePurchase(userId: string, items: any[], transactionId: string) {
   try {
+    // Validate inputs
+    if (!userId) {
+      throw new Error("User ID is required");
+    }
+    
+    if (!items || items.length === 0) {
+      throw new Error("Items array is empty or invalid");
+    }
+    
+    if (!transactionId) {
+      throw new Error("Transaction ID is required");
+    }
+    
     const purchases = items.map(item => ({
       user_id: userId,
       mod_id: item.id,
@@ -24,20 +37,42 @@ export async function savePurchase(userId: string, items: any[], transactionId: 
       status: 'completed'
     }));
 
+    // Debug output to help understand any issues
+    console.log('Attempting to save purchases:', JSON.stringify({
+      userId,
+      itemCount: items.length,
+      transactionId
+    }));
+
     const { data, error } = await supabase
       .from('purchases')
       .insert(purchases)
       .select();
 
     if (error) {
-      console.error('Error saving purchase:', error);
-      throw error;
+      // Convert Supabase error to a more descriptive error
+      console.error('Error saving purchase:', JSON.stringify(error));
+      const errorMessage = error.message || error.details || 'Database error while saving purchase';
+      const errorCode = error.code || 'UNKNOWN';
+      
+      throw new Error(`Database error (${errorCode}): ${errorMessage}`);
+    }
+
+    if (!data) {
+      throw new Error("Purchase was saved but no data was returned");
     }
 
     return data;
   } catch (error) {
-    console.error('Error in savePurchase:', error);
-    throw error;
+    // Ensure we always throw an Error object with a message
+    if (error instanceof Error) {
+      console.error('Error in savePurchase:', error.message);
+      throw error;
+    } else {
+      const errorDetail = typeof error === 'object' ? JSON.stringify(error) : String(error);
+      console.error('Error in savePurchase:', errorDetail);
+      throw new Error(`Failed to save purchase: ${errorDetail}`);
+    }
   }
 }
 

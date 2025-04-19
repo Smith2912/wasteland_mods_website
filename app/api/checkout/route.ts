@@ -37,7 +37,8 @@ export async function POST(request: NextRequest) {
       if (!error && data?.user) {
         session = { user: data.user };
       } else {
-        console.error('Invalid token in Authorization header:', error);
+        console.error('Invalid token in Authorization header:', JSON.stringify(error));
+        throw new Error(`Authentication failed: ${error?.message || 'Invalid token'}`);
       }
     }
     
@@ -57,7 +58,17 @@ export async function POST(request: NextRequest) {
     }
     
     // Get request body
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (e) {
+      console.error('Failed to parse request body:', e);
+      return NextResponse.json(
+        { error: 'Invalid request: could not parse JSON body' },
+        { status: 400 }
+      );
+    }
+    
     const { items, transactionId } = body;
     
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -74,23 +85,67 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log('Processing purchase for user:', session.user.id);
+    console.log('Processing purchase for user:', session.user.id, 'with transaction:', transactionId);
     
-    // Save the purchase to the database
-    const savedPurchase = await savePurchase(
-      session.user.id,
-      items,
-      transactionId
+    // Validate items format
+    const validItems = items.every(item => 
+      item && 
+      typeof item === 'object' && 
+      'id' in item && 
+      'price' in item &&
+      typeof item.id === 'string' && 
+      typeof item.price === 'number'
     );
     
-    return NextResponse.json({
-      success: true,
-      purchases: savedPurchase
-    });
+    if (!validItems) {
+      return NextResponse.json(
+        { error: 'Items must have valid id and price properties' },
+        { status: 400 }
+      );
+    }
+    
+    // Save the purchase to the database
+    try {
+      const savedPurchase = await savePurchase(
+        session.user.id,
+        items,
+        transactionId
+      );
+      
+      return NextResponse.json({
+        success: true,
+        purchases: savedPurchase
+      });
+    } catch (dbError) {
+      console.error('Database error during checkout:', 
+        dbError instanceof Error ? dbError.message : JSON.stringify(dbError)
+      );
+      
+      // Format a user-friendly error
+      const errorMessage = dbError instanceof Error 
+        ? dbError.message 
+        : 'Database error while saving purchase';
+        
+      return NextResponse.json(
+        { error: errorMessage },
+        { status: 500 }
+      );
+    }
   } catch (error) {
-    console.error('Error processing checkout:', error);
-    // Return more specific error information
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // Detailed error logging
+    const errorDetails = error instanceof Error 
+      ? { message: error.message, stack: error.stack }
+      : { raw: JSON.stringify(error) };
+      
+    console.error('Error processing checkout:', errorDetails);
+    
+    // User-friendly error response
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : typeof error === 'object' 
+        ? JSON.stringify(error) 
+        : String(error) || 'Unknown error';
+        
     return NextResponse.json(
       { error: `Failed to process checkout: ${errorMessage}` },
       { status: 500 }
