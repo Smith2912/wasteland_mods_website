@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import AuthButton from './AuthButton';
@@ -23,8 +24,15 @@ export default function Navigation() {
   return (
     <nav className="bg-zinc-900 text-white py-4">
       <div className="container mx-auto px-4 flex justify-between items-center">
-        <Link href="/" className="text-xl font-bold tracking-tight">
-          Wasteland Mods
+        <Link href="/" className="flex items-center">
+          <Image 
+            src="/NewWastelandModsLogoDiscord.png" 
+            alt="Wasteland Mods Logo" 
+            width={50} 
+            height={50} 
+            className="h-auto" 
+            priority
+          />
         </Link>
         
         {/* Mobile menu button */}
