@@ -3,7 +3,7 @@ import querystring from 'querystring';
 
 // Steam OpenID configuration
 const STEAM_OPENID_URL = 'https://steamcommunity.com/openid/login';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const APP_URL = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
 
 export async function GET(request: NextRequest) {
   // Steam OpenID parameters
