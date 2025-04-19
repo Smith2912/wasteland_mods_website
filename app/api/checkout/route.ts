@@ -2,19 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { savePurchase } from '@/app/lib/db';
 import { createClient } from '@supabase/supabase-js';
 
-// Create a direct Supabase client without the cookie middleware
-const supabase = createClient(
+// Create a simple Supabase client for auth only
+const authClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
 export async function POST(request: NextRequest) {
   try {
-    // Get the session from Authorization header
-    let session;
-    let accessToken;
-    
-    // Get from Authorization header
+    // Get the auth token from header
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       console.error('No valid Authorization header found');
@@ -24,41 +20,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract the token
-    accessToken = authHeader.substring(7);
-    console.log('Auth token received:', accessToken ? 'Valid token present' : 'No token');
+    // Extract token
+    const accessToken = authHeader.substring(7);
+    console.log('Auth token received and will be validated');
     
-    // Validate the token
-    try {
-      const { data, error } = await supabase.auth.getUser(accessToken);
-      
-      if (error) {
-        console.error('Error validating token:', error.message);
-        return NextResponse.json(
-          { error: `Authentication failed: ${error.message}` },
-          { status: 401 }
-        );
-      }
-      
-      if (!data?.user) {
-        console.error('No user found in token');
-        return NextResponse.json(
-          { error: 'Authentication failed: Invalid user token' },
-          { status: 401 }
-        );
-      }
-      
-      // Valid user found
-      session = { user: data.user };
-      console.log('Authenticated via token:', data.user.id);
-      
-    } catch (error) {
-      console.error('Error processing auth token:', error);
+    // Just validate the user, don't try to maintain the session
+    const { data: userData, error: userError } = await authClient.auth.getUser(accessToken);
+    
+    if (userError || !userData?.user) {
+      console.error('Error validating user:', userError || 'No user data returned');
       return NextResponse.json(
-        { error: 'Authentication failed: Could not validate token' },
+        { error: 'Authentication failed: Invalid user credentials' },
         { status: 401 }
       );
     }
+    
+    // User is valid - get their ID
+    const userId = userData.user.id;
+    console.log('User authentication successful, ID:', userId);
     
     // Get request body
     let body;
@@ -88,7 +67,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log('Processing purchase for user:', session.user.id, 'with transaction:', transactionId);
+    console.log('Processing purchase for user:', userId, 'with transaction:', transactionId);
     
     // Validate items format
     const validItems = items.every(item => 
@@ -96,8 +75,7 @@ export async function POST(request: NextRequest) {
       typeof item === 'object' && 
       'id' in item && 
       'price' in item &&
-      typeof item.id === 'string' && 
-      typeof item.price === 'number'
+      typeof item.id === 'string'
     );
     
     if (!validItems) {
@@ -107,14 +85,20 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Save the purchase to the database
+    // Log transaction details for debugging
+    console.log('Transaction details:', JSON.stringify({
+      userId,
+      itemCount: items.length,
+      transactionId,
+      orderDetails: body.orderDetails || {}
+    }));
+    
+    // Save the purchase to the database - no need to pass token anymore
     try {
-      // Pass the token to the savePurchase function
       const savedPurchase = await savePurchase(
-        session.user.id,
+        userId,
         items,
-        transactionId,
-        accessToken
+        transactionId
       );
       
       return NextResponse.json({
