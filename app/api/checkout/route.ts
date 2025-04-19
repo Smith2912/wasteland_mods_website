@@ -89,8 +89,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error processing checkout:', error);
+    // Return more specific error information
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to process checkout' },
+      { error: `Failed to process checkout: ${errorMessage}` },
       { status: 500 }
     );
   }
