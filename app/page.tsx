@@ -35,30 +35,32 @@ export default function Home() {
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
-      <section className="relative h-[600px] w-full">
+      <section className="relative aspect-[16/9] md:aspect-[21/9] lg:aspect-auto lg:h-[600px] w-full">
         <RotatingHero />
         
-        <div className="relative z-20 container mx-auto px-4 h-full flex items-center">
-          <div className="max-w-2xl">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 text-glow">
-              Premium DayZ Mods for Your Server
-            </h1>
-            <p className="text-xl text-zinc-200 mb-8">
-              Enhance your DayZ server with high-quality, professionally developed mods that will keep your players coming back.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <Link 
-                href="/mods" 
-                className="bg-red-700 hover:bg-red-800 text-white px-6 py-3 rounded-md text-lg font-medium transition-colors accent-border"
-              >
-                Browse Mods
-              </Link>
-              <Link 
-                href="/about" 
-                className="bg-transparent border-2 border-red-700 hover:bg-red-900/20 text-white px-6 py-3 rounded-md text-lg font-medium transition-colors"
-              >
-                Learn More
-              </Link>
+        <div className="absolute inset-0 flex items-center z-20">
+          <div className="container mx-auto px-4">
+            <div className="max-w-2xl">
+              <h1 className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-4 text-glow">
+                Premium DayZ Mods for Your Server
+              </h1>
+              <p className="text-lg md:text-xl text-zinc-200 mb-6 md:mb-8">
+                Enhance your DayZ server with high-quality, professionally developed mods that will keep your players coming back.
+              </p>
+              <div className="flex flex-wrap gap-4">
+                <Link 
+                  href="/mods" 
+                  className="bg-red-700 hover:bg-red-800 text-white px-4 py-2 md:px-6 md:py-3 rounded-md text-base md:text-lg font-medium transition-colors accent-border"
+                >
+                  Browse Mods
+                </Link>
+                <Link 
+                  href="/about" 
+                  className="bg-transparent border-2 border-red-700 hover:bg-red-900/20 text-white px-4 py-2 md:px-6 md:py-3 rounded-md text-base md:text-lg font-medium transition-colors"
+                >
+                  Learn More
+                </Link>
+              </div>
             </div>
           </div>
         </div>
