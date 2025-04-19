@@ -1,5 +1,5 @@
 [build]
-  command = "prisma generate && npm run build"
+  command = "cp prisma/schema.prisma.deploy prisma/schema.prisma && prisma generate && next build"
   publish = ".next"
 
 [build.environment]
