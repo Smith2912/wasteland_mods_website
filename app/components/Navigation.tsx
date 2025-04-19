@@ -12,7 +12,7 @@ export default function Navigation() {
 
   const navItems = [
     { name: 'Home', path: '/' },
-    { name: 'Mods', path: '/mods' },
+    { name: 'Mods', path: '/store' },
     { name: 'About', path: '/about' },
     { name: 'Contact', path: '/contact' },
   ];
