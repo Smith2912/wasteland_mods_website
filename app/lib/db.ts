@@ -108,11 +108,34 @@ export async function savePurchase(
       }
       
       if (data && data.success) {
-        console.log(`✅ Successfully saved item ${item.id}: ${data.message}`);
-        allResults.push(data.purchase);
+        console.log(`✅ Successfully saved item ${item.id}: ${data.message || 'Purchase saved'}`);
+        if (data.purchase_id) {
+          // Format of the result changed slightly
+          allResults.push({
+            id: data.purchase_id,
+            user_id: userId,
+            mod_id: item.id,
+            transaction_id: transactionId,
+            purchase_date: new Date().toISOString(),
+            amount: price,
+            status: 'completed'
+          });
+        } else if (data.purchase) {
+          allResults.push(data.purchase);
+        }
       } else {
         console.warn(`⚠️ Item ${item.id} saved but with warning: ${data?.message || 'Unknown result'}`);
-        if (data?.purchase) {
+        if (data?.purchase_id) {
+          allResults.push({
+            id: data.purchase_id,
+            user_id: userId,
+            mod_id: item.id,
+            transaction_id: transactionId,
+            purchase_date: new Date().toISOString(),
+            amount: price,
+            status: 'completed'
+          });
+        } else if (data?.purchase) {
           allResults.push(data.purchase);
         }
       }
