@@ -127,15 +127,19 @@ export async function savePurchase(
           throw new Error(`Permission denied: RLS policy is blocking the insert operation. Make sure you're authenticated and have the correct role.`);
         }
         
-        // Test permissions with a simple select query
-        const { error: selectError } = await db
-          .from('purchases')
-          .select('count(*)')
-          .limit(1);
-          
-        if (selectError) {
-          console.error('Permission test failed:', JSON.stringify(selectError));
-          throw new Error(`Database access issue: ${selectError.message || 'Cannot access purchases table'}`);
+        // Test permissions with a simple select query - fixed to use proper Supabase syntax
+        try {
+          const { error: selectError } = await db
+            .from('purchases')
+            .select('id')
+            .limit(1);
+            
+          if (selectError) {
+            console.error('Permission test failed:', JSON.stringify(selectError));
+            throw new Error(`Database access issue: ${selectError.message || 'Cannot access purchases table'}`);
+          }
+        } catch (e) {
+          console.error('Error during permission test:', e);
         }
         
         const errorMessage = error.message || error.details || 'Database error while saving purchase';

@@ -16,37 +16,46 @@ export async function POST(request: NextRequest) {
     
     // Get from Authorization header
     const authHeader = request.headers.get('Authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      accessToken = authHeader.substring(7);
-      console.log('Auth token received:', accessToken ? 'Valid token present' : 'No token');
-      
-      try {
-        const { data, error } = await supabase.auth.getUser(accessToken);
-        
-        if (error) {
-          console.error('Error validating token:', error.message);
-          throw new Error(`Authentication failed: ${error.message}`);
-        } else if (data?.user) {
-          session = { user: data.user };
-          console.log('Authenticated via token:', data.user.id);
-        }
-      } catch (error) {
-        console.error('Error processing auth token:', error);
-        throw new Error('Authentication failed: Could not validate token');
-      }
-    } else {
-      console.error('No Authorization header found');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('No valid Authorization header found');
       return NextResponse.json(
-        { error: 'Authentication required - No Authorization header' },
+        { error: 'Authentication required - Invalid or missing Authorization header' },
         { status: 401 }
       );
     }
+
+    // Extract the token
+    accessToken = authHeader.substring(7);
+    console.log('Auth token received:', accessToken ? 'Valid token present' : 'No token');
     
-    // Check if we have a valid user
-    if (!session?.user) {
-      console.error('No authenticated user found for checkout');
+    // Validate the token
+    try {
+      const { data, error } = await supabase.auth.getUser(accessToken);
+      
+      if (error) {
+        console.error('Error validating token:', error.message);
+        return NextResponse.json(
+          { error: `Authentication failed: ${error.message}` },
+          { status: 401 }
+        );
+      }
+      
+      if (!data?.user) {
+        console.error('No user found in token');
+        return NextResponse.json(
+          { error: 'Authentication failed: Invalid user token' },
+          { status: 401 }
+        );
+      }
+      
+      // Valid user found
+      session = { user: data.user };
+      console.log('Authenticated via token:', data.user.id);
+      
+    } catch (error) {
+      console.error('Error processing auth token:', error);
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'Authentication failed: Could not validate token' },
         { status: 401 }
       );
     }
