@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from "next/link";
 import Image from "next/image";
 
-export default function AccountPage() {
+// Separate component that uses useSearchParams
+function AccountContent() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [steamLinked, setSteamLinked] = useState(false);
@@ -161,5 +162,24 @@ export default function AccountPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Loading fallback component
+function AccountLoading() {
+  return (
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Account</h1>
+      <div className="animate-pulse">Loading account information...</div>
+    </div>
+  );
+}
+
+// Main component with Suspense boundary
+export default function AccountPage() {
+  return (
+    <Suspense fallback={<AccountLoading />}>
+      <AccountContent />
+    </Suspense>
   );
 } 
