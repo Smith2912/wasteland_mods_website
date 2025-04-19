@@ -66,6 +66,7 @@ export default function Footer() {
         
         <div className="mt-8 pt-8 border-t border-red-900 text-center">
           <p>&copy; {currentYear} Wasteland Mods. All rights reserved.</p>
+          <p className="mt-2 text-sm">Website Created By The Songsmith</p>
         </div>
       </div>
     </footer>
