@@ -10,7 +10,7 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "migrate:dev": "prisma migrate dev",
-    "migrate:deploy": "prisma migrate deploy"
+    "migrate:deploy": "prisma migrate deploy --preview-feature --timeout 60"
   },
   "dependencies": {
     "@auth/core": "^0.34.2",
