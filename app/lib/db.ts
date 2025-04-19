@@ -12,7 +12,7 @@ export interface Purchase {
 }
 
 /**
- * Save a purchase to the database using the save_purchase RPC function
+ * Save a purchase to the database with simplified approach
  * @param userId The authenticated user's ID
  * @param items Array of items to purchase
  * @param transactionId PayPal transaction ID
@@ -24,14 +24,12 @@ export async function savePurchase(
   transactionId: string, 
   accessToken?: string
 ) {
-  let db = supabase;
-  
   try {
-    console.log('🔍 Starting savePurchase function with:', JSON.stringify({
-      userId: userId,
+    console.log('🔍 Starting savePurchase function with:', {
+      userId,
       itemCount: items?.length || 0,
       hasToken: !!accessToken
-    }));
+    });
     
     // Validate inputs
     if (!userId) {
@@ -53,24 +51,14 @@ export async function savePurchase(
       throw new Error("Server configuration error: Missing required database credentials");
     }
     
-    // Create service client with admin rights
+    // Create a basic service client with admin privileges
     const serviceClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      serviceRoleKey,
-      {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false
-        }
-      }
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      serviceRoleKey
     );
     
-    // Given the RPC failures, let's temporarily use the direct insert method
-    console.log('⚠️ Using direct insert method due to RPC issues');
-    
-    // Create the purchase objects
+    // Simplest approach - create purchase objects
     const purchases = items.map(item => {
-      // Validate each item has an id
       if (!item.id) {
         throw new Error(`Item missing required id field: ${JSON.stringify(item)}`);
       }
@@ -98,71 +86,25 @@ export async function savePurchase(
       };
     });
     
-    // Debug output to help understand any issues
-    console.log('📝 Purchase data being prepared:', JSON.stringify(purchases));
+    console.log('📝 Inserting purchases:', purchases);
     
-    // Direct approach with service role client
-    try {
-      // Try inserting directly with all records
-      console.log('🔒 Using service client to insert all records');
-      const { data, error } = await serviceClient
-        .from('purchases')
-        .insert(purchases)
-        .select();
-        
-      if (error) {
-        console.error('🔴 Insert error:', JSON.stringify(error));
-        throw new Error(`Database error (${error.code || 'UNKNOWN'}): ${error.message || error.details || JSON.stringify(error)}`);
-      }
+    // Simple insert with basic error handling
+    const { data, error } = await serviceClient
+      .from('purchases')
+      .insert(purchases)
+      .select();
       
-      console.log(`✅ Successfully inserted ${data?.length || 0} records`);
-      return data || [];
-    } catch (insertError) {
-      console.error('🔴 Insert failed:', insertError);
-      
-      // Try one-by-one as last resort
-      console.log('🔍 Attempting one-by-one insert as last resort...');
-      
-      const savedItems = [];
-      let hasSucceeded = false;
-      
-      // Try inserting one by one as a last resort
-      for (const purchase of purchases) {
-        try {
-          const { data: itemData, error: itemError } = await serviceClient
-            .from('purchases')
-            .insert([purchase])
-            .select();
-            
-          if (itemError) {
-            console.error(`🔴 Failed to insert item ${purchase.mod_id}:`, JSON.stringify(itemError));
-          } else if (itemData && itemData.length > 0) {
-            console.log(`✅ Successfully inserted item: ${purchase.mod_id}`);
-            savedItems.push(...itemData);
-            hasSucceeded = true;
-          }
-        } catch (singleError) {
-          console.error(`🔴 Error on item ${purchase.mod_id}:`, singleError);
-        }
-      }
-      
-      if (hasSucceeded) {
-        console.log(`✅ Salvaged ${savedItems.length} purchase records using fallback method`);
-        return savedItems;
-      }
-      
-      throw new Error(`Failed to save purchases after multiple attempts: ${insertError instanceof Error ? insertError.message : JSON.stringify(insertError)}`);
+    if (error) {
+      // Log the complete error object for debugging
+      console.error('🔴 Database error:', error);
+      throw new Error(`Database error: ${error.message || JSON.stringify(error)}`);
     }
+    
+    console.log('✅ Successfully saved purchases:', data);
+    return data || [];
   } catch (error) {
-    // Final error handler
-    if (error instanceof Error) {
-      console.error('🔴 Error in savePurchase:', error.message, error.stack);
-      throw error;
-    } else {
-      const errorDetail = typeof error === 'object' ? JSON.stringify(error) : String(error);
-      console.error('🔴 Unknown error in savePurchase:', errorDetail);
-      throw new Error(`Failed to save purchase: ${errorDetail}`);
-    }
+    console.error('🔴 Error in savePurchase:', error);
+    throw error;
   }
 }
 
