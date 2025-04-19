@@ -58,3 +58,26 @@ body {
 .text-glow {
   text-shadow: 0 0 5px rgba(255, 0, 0, 0.7);
 }
+
+/* Hero image animations */
+.hero-image {
+  transition: opacity 1.5s ease-in-out;
+}
+
+.hero-image-enter {
+  opacity: 0;
+}
+
+.hero-image-enter-active {
+  opacity: 1;
+  transition: opacity 1.5s ease-in-out;
+}
+
+.hero-image-exit {
+  opacity: 1;
+}
+
+.hero-image-exit-active {
+  opacity: 0;
+  transition: opacity 1.5s ease-in-out;
+}

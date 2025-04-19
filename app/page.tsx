@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import ModCard from "./components/ModCard";
+import RotatingHero from "./components/RotatingHero";
 
 // Mock data for featured mods
 const featuredMods = [
@@ -35,17 +36,7 @@ export default function Home() {
     <div className="flex flex-col">
       {/* Hero Section */}
       <section className="relative h-[600px] w-full">
-        <div className="absolute inset-0 bg-black/70 z-10" />
-        <div className="absolute inset-0">
-          <Image
-            src="/images/hero-dayz.jpg" 
-            alt="DayZ Wasteland"
-            fill
-            className="object-cover"
-            sizes="100vw"
-            priority
-          />
-        </div>
+        <RotatingHero />
         
         <div className="relative z-20 container mx-auto px-4 h-full flex items-center">
           <div className="max-w-2xl">
