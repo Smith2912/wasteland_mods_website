@@ -6,254 +6,177 @@ import { User, Session } from '@supabase/supabase-js';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from "next/link";
 import Image from "next/image";
-import { createClient } from "@supabase/supabase-js";
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import toast from 'react-hot-toast';
-
-// Function to verify and debug authentication providers
-async function debugAuthProviders(userId: string, client = supabase) {
-  if (!userId) {
-    console.error('No user ID provided for debugging');
-    return { success: false, error: 'No user ID provided' };
-  }
-
-  try {
-    console.log('🔍 Checking auth providers for user:', userId);
-    
-    // Get user session data directly
-    const { data: sessionData, error: sessionError } = await client.auth.getSession();
-    
-    if (sessionError) {
-      console.error('❌ Error getting session data:', sessionError);
-    } else {
-      console.log('✅ Session data:', sessionData.session ? 'Valid session found' : 'No active session');
-      
-      if (sessionData.session) {
-        console.log('✅ Access token available:', !!sessionData.session.access_token);
-        console.log('✅ User in session:', sessionData.session.user);
-      }
-    }
-    
-    // Get user data
-    const { data: userData, error: userError } = await client.auth.getUser();
-    
-    if (userError) {
-      console.error('❌ Error getting user data:', userError);
-    } else if (userData) {
-      console.log('✅ User data found:', userData.user);
-      console.log('✅ Auth providers:', userData.user.identities?.map(id => id.provider) || []);
-    }
-    
-    // Check for user purchases
-    const { data: purchases, error: purchasesError } = await client
-      .from('purchases')
-      .select('*')
-      .eq('user_id', userId);
-    
-    if (purchasesError) {
-      console.error('❌ Error querying user purchases:', purchasesError);
-    } else {
-      console.log(`✅ User has ${purchases?.length || 0} purchases:`, purchases);
-    }
-    
-    return { 
-      success: true,
-      userData: userData?.user,
-      providers: userData?.user?.identities?.map(id => id.provider) || [],
-      purchases: purchases
-    };
-  } catch (error) {
-    console.error('❌ Error in debugAuthProviders:', error);
-    return { success: false, error };
-  }
-}
-
-// Helper to call the auth verify API endpoint
-async function verifyAuthStatus(token: string | null) {
-  try {
-    if (!token) {
-      return { error: 'No access token available' };
-    }
-    
-    const response = await fetch('/api/auth/verify', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    if (!response.ok) {
-      return { 
-        error: `Error: ${response.status} ${response.statusText}`,
-        details: await response.text()
-      };
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Failed to verify auth status:', error);
-    return { error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
 
 // Separate component that uses useSearchParams
 function AccountContent() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  
+  // Connection states
   const [steamLinked, setSteamLinked] = useState(false);
   const [steamUsername, setSteamUsername] = useState<string | null>(null);
-  const [steamAvatar, setSteamAvatar] = useState<string | null>(null);
-  const [authProviders, setAuthProviders] = useState<string[]>([]);
+  const [discordLinked, setDiscordLinked] = useState(false);
+  const [discordUsername, setDiscordUsername] = useState<string | null>(null);
+  
+  // Action states
+  const [unlinkLoading, setUnlinkLoading] = useState(false);
+  
+  // Debug states
   const [debugMode, setDebugMode] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
-  const [verifyInfo, setVerifyInfo] = useState<any>(null);
-  const [verifyLoading, setVerifyLoading] = useState(false);
-  const [unlinkLoading, setUnlinkLoading] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [discordLinked, setDiscordLinked] = useState(false);
-  const [discordUsername, setDiscordUsername] = useState<string>('');
-  const searchParams = useSearchParams();
-  const router = useRouter();
   
-  // Handle query parameters (success/error messages)
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const supabase = createClientComponentClient();
+  
+  // Handle query parameters
   const steamSuccess = searchParams.get('steam') === 'linked';
   const steamError = searchParams.get('error');
-  const steamPending = searchParams.get('steamPending');
-  const pendingSteamUsername = searchParams.get('steamUsername');
   
-  const supabaseClient = createClientComponentClient();
-  
-  // Use effect to check if user is authenticated and get session
   useEffect(() => {
-    const getSession = async () => {
+    // Function to load user data and connections
+    async function loadUserData() {
       try {
         setLoading(true);
+        setAuthError(null);
         
-        // Get current session using the client component client
-        const { data: { session: currentSession }, error } = await supabaseClient.auth.getSession();
+        // First, get the current session
+        const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error('Error getting session:', error);
+          console.error("Session error:", error.message);
+          setAuthError(error.message);
           setLoading(false);
           return;
         }
         
-        console.log("Session check result:", currentSession ? "Session found" : "No session found");
+        if (!session) {
+          console.log("No active session found");
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
         
-        if (currentSession) {
-          // Save the access token for API calls
-          setAccessToken(currentSession.access_token);
-          
-          // Set session and user data
-          setSession(currentSession);
-          setUser(currentSession.user);
-          setIsAuthenticated(true);
-          
-          // Set auth providers array from identities
-          const providers = currentSession.user?.identities?.map(identity => identity.provider) || [];
-          setAuthProviders(providers);
-          
-          // Check if user has Discord linked
-          const hasDiscordProvider = providers.includes('discord') || 
-                                     currentSession.user?.app_metadata?.provider === 'discord';
-          
-          if (hasDiscordProvider) {
-            setDiscordLinked(true);
-            setDiscordUsername(currentSession.user?.user_metadata?.discord_username || 
-                               currentSession.user?.user_metadata?.full_name || '');
-          }
-          
-          // Check if user has Steam linked via user metadata
-          const steamId = currentSession.user?.user_metadata?.steamId;
-          const steamUsername = currentSession.user?.user_metadata?.steamUsername;
-          const steamAvatar = currentSession.user?.user_metadata?.steamAvatar;
-          
-          if (steamId) {
-            setSteamLinked(true);
-            setSteamUsername(steamUsername || '');
-            setSteamAvatar(steamAvatar || '');
-          }
-          
-          // Debug the session and user data
-          console.log("User data:", currentSession.user);
-          console.log("Auth providers:", providers);
-          
-          // Run debug check if in debug mode
-          if (debugMode) {
-            debugAuthProviders(currentSession.user.id);
-          }
+        // We have a session, set it
+        setSession(session);
+        setUser(session.user);
+        
+        console.log("User authenticated:", session.user?.id);
+        
+        // Check Discord connection
+        const isDiscordLinked = 
+          session.user?.identities?.some(id => id.provider === 'discord') ||
+          session.user?.app_metadata?.provider === 'discord';
+        
+        setDiscordLinked(isDiscordLinked);
+        setDiscordUsername(
+          session.user?.user_metadata?.discord_username || 
+          (isDiscordLinked ? session.user?.user_metadata?.full_name : null)
+        );
+        
+        // Check Steam connection
+        const steamId = session.user?.user_metadata?.steamId;
+        setSteamLinked(!!steamId);
+        setSteamUsername(session.user?.user_metadata?.steamUsername || null);
+        
+        // Load debugging data if in debug mode
+        if (debugMode) {
+          await refreshDebugData();
         }
       } catch (err) {
-        console.error("Session retrieval error:", err);
+        console.error("Error loading user data:", err);
+        setAuthError(err instanceof Error ? err.message : "Unknown error");
       } finally {
         setLoading(false);
       }
-    };
+    }
     
-    getSession();
+    loadUserData();
     
-    // Subscribe to auth changes
-    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, newSession) => {
-      console.log("Auth state changed:", _event);
-      setSession(newSession);
-      setIsAuthenticated(!!newSession);
-      
-      if (newSession?.user) {
-        setUser(newSession.user);
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, newSession) => {
+        console.log("Auth state change:", event);
         
-        // Update providers
-        const providers = newSession.user?.identities?.map(identity => identity.provider) || [];
-        setAuthProviders(providers);
-      } else {
-        setUser(null);
-        setAuthProviders([]);
+        if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setSession(null);
+          setSteamLinked(false);
+          setDiscordLinked(false);
+          router.push('/');
+          return;
+        }
+        
+        if (newSession) {
+          setUser(newSession.user);
+          setSession(newSession);
+          
+          // If the user just signed in or the session was updated, refresh the data
+          if (['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(event)) {
+            await loadUserData();
+          }
+        }
       }
-    });
+    );
     
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabaseClient.auth, debugMode]);
+  }, [supabase, router, debugMode]);
   
-  const handleSteamLink = () => {
-    router.push('/api/auth/steam');
-  };
-  
-  const handleVerifyAuth = async () => {
-    setVerifyLoading(true);
-    try {
-      const result = await verifyAuthStatus(accessToken);
-      setVerifyInfo(result);
-    } catch (error) {
-      console.error('Verification failed:', error);
-      setVerifyInfo({ error: error instanceof Error ? error.message : 'Unknown error' });
-    } finally {
-      setVerifyLoading(false);
-    }
-  };
-  
-  const toggleDebugMode = async () => {
-    setDebugMode(!debugMode);
-    if (!debugMode && user) {
-      const result = await debugAuthProviders(user.id);
-      setDebugInfo(result);
-    }
-  };
-  
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
-  };
-  
-  const handleSteamUnlink = async () => {
-    setUnlinkLoading(true);
+  // Function to refresh debug data
+  async function refreshDebugData() {
+    if (!session?.user?.id) return;
     
     try {
-      if (!session) {
-        toast.error("You must be logged in to unlink your Steam account");
-        return;
-      }
+      // Get user details
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      // Get user purchases
+      const { data: purchases, error: purchasesError } = await supabase
+        .from('purchases')
+        .select('*')
+        .eq('user_id', session.user.id);
+      
+      setDebugInfo({
+        userDetails: userData?.user || null,
+        userError: userError?.message || null,
+        providers: userData?.user?.identities?.map(id => id.provider) || [],
+        purchases: purchases || [],
+        purchasesError: purchasesError?.message || null,
+        session: {
+          expires_at: session.expires_at,
+          token_type: session.token_type,
+          has_access_token: !!session.access_token
+        }
+      });
+    } catch (err) {
+      console.error("Debug data error:", err);
+      setDebugInfo({ error: err instanceof Error ? err.message : "Unknown error" });
+    }
+  }
+  
+  // Function to handle signing out
+  const handleSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      router.push('/');
+    } catch (error) {
+      console.error("Sign out error:", error);
+      toast.error("Failed to sign out");
+    }
+  };
+  
+  // Function to handle Steam unlinking
+  const handleSteamUnlink = async () => {
+    try {
+      setUnlinkLoading(true);
       
       const { error } = await supabase.auth.updateUser({
         data: { 
@@ -263,76 +186,85 @@ function AccountContent() {
         }
       });
       
-      if (error) {
-        console.error("Error unlinking Steam account:", error);
-        toast.error("Failed to unlink Steam account");
-        return;
-      }
+      if (error) throw error;
       
-      setSteamLinked(false);
-      setSteamUsername('');
-      setSteamAvatar('');
       toast.success("Steam account unlinked successfully");
+      setSteamLinked(false);
+      setSteamUsername(null);
+      
+      // Refresh session to update user metadata
+      await supabase.auth.refreshSession();
     } catch (error) {
-      console.error("Error unlinking Steam account:", error);
+      console.error("Steam unlink error:", error);
       toast.error("Failed to unlink Steam account");
     } finally {
       setUnlinkLoading(false);
     }
   };
   
-  // Handle Steam unlinking alternative method
-  const handleSteamUnlinkAlternative = async () => {
-    try {
-      setUnlinkLoading(true);
-      
-      if (!session || !session.user) {
-        console.error("No session or user found");
-        setUnlinkLoading(false);
-        return;
-      }
-
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          steamId: null,
-          steamUsername: null,
-          steamAvatar: null
-        }
-      });
-
-      if (error) {
-        console.error("Error unlinking Steam account:", error);
-        alert("Failed to unlink Steam account: " + error.message);
-      } else {
-        console.log("Successfully unlinked Steam account");
-        alert("Successfully unlinked Steam account");
-        
-        // Refresh session
-        const { data } = await supabase.auth.refreshSession();
-        if (data.session) {
-          setSession(data.session);
-          setSteamLinked(false);
-          setSteamUsername(null);
-          setSteamAvatar(null);
-        }
-      }
-    } catch (error) {
-      console.error("Error in unlinking Steam account:", error);
-      alert("An unexpected error occurred while unlinking your Steam account");
-    } finally {
-      setUnlinkLoading(false);
+  // Function to link Steam account
+  const handleSteamLink = () => {
+    router.push('/api/auth/steam');
+  };
+  
+  // Toggle debug mode
+  const toggleDebugMode = async () => {
+    setDebugMode(!debugMode);
+    if (!debugMode && session?.user?.id) {
+      await refreshDebugData();
     }
   };
   
+  // Show loading state
   if (loading) {
     return (
       <div className="container mx-auto p-4">
         <h1 className="text-2xl font-bold mb-4">Account</h1>
-        <div className="animate-pulse">Loading account information...</div>
+        <div className="flex justify-center items-center min-h-[300px]">
+          <div className="h-12 w-12 border-4 border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+        </div>
       </div>
     );
   }
   
+  // Show error state
+  if (authError) {
+    return (
+      <div className="container mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-4">Account</h1>
+        <div className="bg-red-500 text-white p-4 rounded-lg">
+          <p className="font-semibold">Authentication Error</p>
+          <p>{authError}</p>
+          <button 
+            onClick={() => router.push('/auth/signin?callbackUrl=/account')}
+            className="mt-2 bg-white text-red-500 px-4 py-2 rounded-md font-semibold"
+          >
+            Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  // If not authenticated, show sign in prompt
+  if (!user || !session) {
+    return (
+      <div className="container mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-4">Account</h1>
+        <div className="bg-gray-800 p-6 rounded-lg text-center">
+          <h2 className="text-xl mb-4">Please sign in to view your account</h2>
+          <button 
+            onClick={() => router.push('/auth/signin?callbackUrl=/account')}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold"
+          >
+            Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show account page for authenticated users
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Account</h1>
@@ -346,7 +278,7 @@ function AccountContent() {
       
       {steamError && (
         <div className="bg-red-500 text-white p-4 mb-4 rounded">
-          Error: {steamError.replace(/_/g, ' ')}
+          Error: {decodeURIComponent(steamError).replace(/_/g, ' ')}
         </div>
       )}
       
@@ -361,7 +293,7 @@ function AccountContent() {
             />
           ) : (
             <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-xl">
-              {user?.email?.[0].toUpperCase() || '?'}
+              {user?.email ? user.email[0].toUpperCase() : '?'}
             </div>
           )}
           
@@ -399,16 +331,17 @@ function AccountContent() {
             <span>Discord</span>
           </div>
           
-          {discordLinked && (
+          {discordLinked ? (
             <div className="flex items-center space-x-2">
-              {user?.user_metadata?.avatar_url && user?.user_metadata?.provider === 'discord' && (
+              {user?.user_metadata?.avatar_url && discordLinked && (
                 <img src={user.user_metadata.avatar_url} alt="Discord" className="w-6 h-6 rounded-full" />
               )}
               <span className="text-green-500">
-                {user?.user_metadata?.provider === 'discord' && user?.user_metadata?.full_name ? 
-                  user.user_metadata.full_name : 'Connected'}
+                {discordUsername || 'Connected'}
               </span>
             </div>
+          ) : (
+            <span className="text-gray-400">Not connected</span>
           )}
         </div>
         
@@ -425,36 +358,29 @@ function AccountContent() {
             <span>Steam</span>
           </div>
           
-          {steamLinked && steamUsername && (
-            <div className="flex flex-col space-y-2 mb-4">
-              <div className="flex items-center space-x-2">
-                <Image 
-                  src="/SteamLogo.png" 
-                  alt="Steam Logo" 
-                  width={32} 
-                  height={32} 
-                  className="w-8 h-8 rounded-full"
-                />
-                <span className="text-white">{steamUsername}</span>
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  className="px-3 py-1 text-sm bg-red-600 hover:bg-red-700 text-white rounded"
-                  onClick={handleSteamUnlink}
-                  disabled={unlinkLoading}
-                >
-                  {unlinkLoading ? 'Unlinking...' : 'Unlink'}
-                </button>
-                <button
-                  className="px-3 py-1 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded"
-                  onClick={handleSteamUnlinkAlternative}
-                  disabled={unlinkLoading}
-                  title="Alternative method to unlink account"
-                >
-                  {unlinkLoading ? 'Unlinking...' : 'Unlink (Alt)'}
-                </button>
-              </div>
+          {steamLinked ? (
+            <div className="flex items-center justify-end space-x-4">
+              <span className="text-green-500">{steamUsername || 'Connected'}</span>
+              <button
+                className="px-3 py-1 text-sm bg-red-600 hover:bg-red-700 text-white rounded"
+                onClick={handleSteamUnlink}
+                disabled={unlinkLoading}
+              >
+                {unlinkLoading ? (
+                  <span className="flex items-center">
+                    <span className="h-4 w-4 border-2 border-t-white border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mr-1"></span>
+                    <span>Unlinking...</span>
+                  </span>
+                ) : 'Unlink'}
+              </button>
             </div>
+          ) : (
+            <button
+              onClick={handleSteamLink}
+              className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded"
+            >
+              Connect
+            </button>
           )}
         </div>
       </div>
@@ -469,55 +395,33 @@ function AccountContent() {
       
       {/* Debug section */}
       <div className="mt-8 pt-4 border-t border-gray-700">
-        <div className="flex space-x-4">
-          <button 
-            onClick={toggleDebugMode}
-            className="text-xs text-gray-500 hover:text-gray-400"
-          >
-            {debugMode ? 'Hide Debug Info' : 'Show Debug Info'}
-          </button>
-          
-          <button 
-            onClick={handleVerifyAuth}
-            disabled={verifyLoading}
-            className="text-xs text-blue-500 hover:text-blue-400 disabled:text-gray-600"
-          >
-            {verifyLoading ? 'Checking...' : 'Verify Auth Status (API)'}
-          </button>
-        </div>
+        <button 
+          onClick={toggleDebugMode}
+          className="text-xs text-gray-500 hover:text-gray-400"
+        >
+          {debugMode ? 'Hide Debug Info' : 'Show Debug Info'}
+        </button>
         
-        {debugMode && (
+        {debugMode && debugInfo && (
           <div className="mt-2 p-4 bg-gray-900 rounded text-xs font-mono whitespace-pre-wrap overflow-auto max-h-96">
-            <h3 className="text-gray-400 mb-2">User Data:</h3>
-            <pre>{JSON.stringify(user, null, 2)}</pre>
+            <h3 className="text-gray-400 mb-2">Session:</h3>
+            <pre>{JSON.stringify(debugInfo.session, null, 2)}</pre>
+            
+            <h3 className="text-gray-400 mt-4 mb-2">User Data:</h3>
+            <pre>{JSON.stringify(debugInfo.userDetails, null, 2)}</pre>
             
             <h3 className="text-gray-400 mt-4 mb-2">Auth Providers:</h3>
-            <pre>{JSON.stringify(authProviders, null, 2)}</pre>
+            <pre>{JSON.stringify(debugInfo.providers, null, 2)}</pre>
             
-            <h3 className="text-gray-400 mt-4 mb-2">Database Check:</h3>
-            <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+            <h3 className="text-gray-400 mt-4 mb-2">Purchases:</h3>
+            <pre>{JSON.stringify(debugInfo.purchases, null, 2)}</pre>
             
-            {verifyInfo && (
-              <>
-                <h3 className="text-gray-400 mt-4 mb-2">API Verification:</h3>
-                <pre>{JSON.stringify(verifyInfo, null, 2)}</pre>
-              </>
-            )}
-            
-            <div className="mt-4 flex space-x-2">
+            <div className="mt-4">
               <button
-                onClick={() => debugAuthProviders(user?.id || '')}
+                onClick={refreshDebugData}
                 className="bg-blue-800 text-white px-2 py-1 text-xs rounded"
               >
                 Refresh Debug Data
-              </button>
-              
-              <button
-                onClick={handleVerifyAuth}
-                disabled={verifyLoading}
-                className="bg-green-800 text-white px-2 py-1 text-xs rounded disabled:bg-gray-700"
-              >
-                {verifyLoading ? 'Checking...' : 'Verify API'}
               </button>
             </div>
           </div>
