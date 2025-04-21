@@ -258,9 +258,8 @@ export default function ModsPage() {
               </div>
               <div className="p-4 pt-0 mt-auto">
                 <a 
-                  href={mod.downloadUrl}
+                  href={`/api/download/${mod.id}`}
                   className="w-full block text-center py-2 px-4 bg-green-600 hover:bg-green-700 rounded-md transition-colors"
-                  download
                 >
                   Download
                 </a>
