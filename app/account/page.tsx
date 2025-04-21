@@ -109,12 +109,14 @@ function AccountContent() {
       
       if (error) {
         console.error('Error getting session:', error);
+        setLoading(false);
         return;
       }
       
       if (currentSession) {
         setSession(currentSession);
         setIsAuthenticated(true);
+        setUser(currentSession.user);
         
         // Check if user has Discord linked
         if (currentSession.user?.app_metadata?.provider === 'discord' ||
@@ -134,6 +136,8 @@ function AccountContent() {
           setSteamAvatar(steamAvatar || '');
         }
       }
+      
+      setLoading(false);
     };
     
     getSession();
