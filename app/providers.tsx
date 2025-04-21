@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { Session } from "@supabase/supabase-js";
 import { CartProvider } from './context/CartContext';
+import { Toaster } from 'react-hot-toast';
 
 // Create a context for the Supabase session
 const AuthContext = createContext<{
@@ -47,6 +48,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{ session, isLoading }}>
       <CartProvider>
+        <Toaster position="top-center" />
         {children}
       </CartProvider>
     </AuthContext.Provider>

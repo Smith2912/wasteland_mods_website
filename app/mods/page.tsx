@@ -200,20 +200,26 @@ export default function ModsPage() {
       const data = await response.json();
       
       if (!response.ok) {
-        console.error('Error unlinking Steam account:', data.error);
-        alert('Failed to unlink Steam account. Please try again.');
+        console.error('Error unlinking Steam account:', data);
+        
+        // Provide a more detailed error message if available
+        const errorMessage = data.details 
+          ? `Failed to unlink Steam account: ${data.details}`
+          : 'Failed to unlink Steam account. Please try again.';
+          
+        alert(errorMessage);
       } else {
         // Update local state
         setSteamLinked(false);
         setSteamUsername(null);
         alert('Steam account unlinked successfully.');
         
-        // Refresh the page to show the Steam link screen
-        router.refresh();
+        // More reliable way to refresh the page
+        window.location.reload();
       }
     } catch (error) {
       console.error('Error in handleSteamUnlink:', error);
-      alert('An unexpected error occurred. Please try again.');
+      alert('An unexpected error occurred while unlinking your Steam account. Please try again later.');
     } finally {
       setUnlinkLoading(false);
     }

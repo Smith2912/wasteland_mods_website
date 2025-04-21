@@ -2,10 +2,13 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { supabase } from '../lib/supabase';
-import { User } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from "next/link";
 import Image from "next/image";
+import { createClient } from "@supabase/supabase-js";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import toast from 'react-hot-toast';
 
 // Function to verify and debug authentication providers
 async function debugAuthProviders(userId: string) {
@@ -82,6 +85,12 @@ function AccountContent() {
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [verifyInfo, setVerifyInfo] = useState<any>(null);
   const [verifyLoading, setVerifyLoading] = useState(false);
+  const [unlinkLoading, setUnlinkLoading] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [discordLinked, setDiscordLinked] = useState(false);
+  const [discordUsername, setDiscordUsername] = useState<string>('');
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -91,75 +100,81 @@ function AccountContent() {
   const steamPending = searchParams.get('steamPending');
   const pendingSteamUsername = searchParams.get('steamUsername');
   
+  const supabase = createClientComponentClient();
+  
+  // Use effect to check if user is authenticated and get session
   useEffect(() => {
-    const getUser = async () => {
-      try {
-        console.log('🔄 Fetching user session...');
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const getSession = async () => {
+      const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Error getting session:', error);
+        return;
+      }
+      
+      if (currentSession) {
+        setSession(currentSession);
+        setIsAuthenticated(true);
         
-        if (sessionError) {
-          console.error('❌ Error getting session:', sessionError);
-          return;
+        // Check if user has Discord linked
+        if (currentSession.user?.app_metadata?.provider === 'discord' ||
+            currentSession.user?.identities?.some(identity => identity.provider === 'discord')) {
+          setDiscordLinked(true);
+          setDiscordUsername(currentSession.user?.user_metadata?.discord_username || '');
         }
         
-        if (!session?.user) {
-          console.log('⚠️ No active session, redirecting...');
-          router.push('/auth/signin');
-          return;
-        }
+        // Check if user has Steam linked via user metadata
+        const steamId = currentSession.user?.user_metadata?.steamId;
+        const steamUsername = currentSession.user?.user_metadata?.steamUsername;
+        const steamAvatar = currentSession.user?.user_metadata?.steamAvatar;
         
-        console.log('✅ User session found:', {
-          id: session.user.id,
-          email: session.user.email,
-          providers: session.user.app_metadata?.providers,
-          hasDiscord: session.user.app_metadata?.provider === 'discord' || (session.user.app_metadata?.providers || []).includes('discord'),
-          hasSteam: !!session.user.user_metadata?.steamId
-        });
-        
-        setUser(session.user);
-        
-        // Track authentication providers
-        const providers = session.user.app_metadata?.providers || [];
-        if (session.user.app_metadata?.provider && !providers.includes(session.user.app_metadata.provider)) {
-          providers.push(session.user.app_metadata.provider);
-        }
-        setAuthProviders(providers);
-        
-        // Check if user has Steam linked
-        const steamId = session.user.user_metadata?.steamId;
         if (steamId) {
           setSteamLinked(true);
-          setSteamUsername(session.user.user_metadata.steamUsername || null);
-          setSteamAvatar(session.user.user_metadata.steamAvatar || null);
+          setSteamUsername(steamUsername || '');
+          setSteamAvatar(steamAvatar || '');
         }
-        
-        // If there's a pending Steam account to link and the user is logged in
-        if (steamPending && session.user) {
-          // Link the Steam account
-          const { error } = await supabase.auth.updateUser({
-            data: { 
-              steamId: steamPending,
-              steamUsername: pendingSteamUsername || 'Steam User'
-            }
-          });
-          
-          if (!error) {
-            setSteamLinked(true);
-            setSteamUsername(pendingSteamUsername);
-            // Remove the query parameters by redirecting
-            router.push('/account?steam=linked');
-          }
-        }
-        
-        setLoading(false);
-      } catch (error) {
-        console.error('❌ Error in getUser:', error);
-        setLoading(false);
       }
     };
     
-    getUser();
-  }, [router, searchParams, steamPending, pendingSteamUsername]);
+    getSession();
+    
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      setIsAuthenticated(!!newSession);
+      
+      if (newSession?.user) {
+        // Update Discord status
+        if (newSession.user?.app_metadata?.provider === 'discord' ||
+            newSession.user?.identities?.some(identity => identity.provider === 'discord')) {
+          setDiscordLinked(true);
+          setDiscordUsername(newSession.user?.user_metadata?.discord_username || '');
+        } else {
+          setDiscordLinked(false);
+          setDiscordUsername('');
+        }
+        
+        // Update Steam status
+        const steamId = newSession.user?.user_metadata?.steamId;
+        const steamUsername = newSession.user?.user_metadata?.steamUsername;
+        const steamAvatar = newSession.user?.user_metadata?.steamAvatar;
+        
+        if (steamId) {
+          setSteamLinked(true);
+          setSteamUsername(steamUsername || '');
+          setSteamAvatar(steamAvatar || '');
+        } else {
+          setSteamLinked(false);
+          setSteamUsername('');
+          setSteamAvatar('');
+        }
+      }
+    });
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase.auth]);
   
   const handleSteamLink = () => {
     router.push('/api/auth/steam');
@@ -189,6 +204,84 @@ function AccountContent() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/');
+  };
+  
+  const handleSteamUnlink = async () => {
+    setUnlinkLoading(true);
+    
+    try {
+      if (!session) {
+        toast.error("You must be logged in to unlink your Steam account");
+        return;
+      }
+      
+      const { error } = await supabase.auth.updateUser({
+        data: { 
+          steamId: null,
+          steamUsername: null,
+          steamAvatar: null
+        }
+      });
+      
+      if (error) {
+        console.error("Error unlinking Steam account:", error);
+        toast.error("Failed to unlink Steam account");
+        return;
+      }
+      
+      setSteamLinked(false);
+      setSteamUsername('');
+      setSteamAvatar('');
+      toast.success("Steam account unlinked successfully");
+    } catch (error) {
+      console.error("Error unlinking Steam account:", error);
+      toast.error("Failed to unlink Steam account");
+    } finally {
+      setUnlinkLoading(false);
+    }
+  };
+  
+  // Handle Steam unlinking alternative method
+  const handleSteamUnlinkAlternative = async () => {
+    try {
+      setUnlinkLoading(true);
+      
+      if (!session || !session.user) {
+        console.error("No session or user found");
+        setUnlinkLoading(false);
+        return;
+      }
+
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          steamId: null,
+          steamUsername: null,
+          steamAvatar: null
+        }
+      });
+
+      if (error) {
+        console.error("Error unlinking Steam account:", error);
+        alert("Failed to unlink Steam account: " + error.message);
+      } else {
+        console.log("Successfully unlinked Steam account");
+        alert("Successfully unlinked Steam account");
+        
+        // Refresh session
+        const { data } = await supabase.auth.refreshSession();
+        if (data.session) {
+          setSession(data.session);
+          setSteamLinked(false);
+          setSteamUsername(null);
+          setSteamAvatar(null);
+        }
+      }
+    } catch (error) {
+      console.error("Error in unlinking Steam account:", error);
+      alert("An unexpected error occurred while unlinking your Steam account");
+    } finally {
+      setUnlinkLoading(false);
+    }
   };
   
   if (loading) {
@@ -266,7 +359,7 @@ function AccountContent() {
             <span>Discord</span>
           </div>
           
-          {authProviders.includes('discord') ? (
+          {discordLinked && (
             <div className="flex items-center space-x-2">
               {user?.user_metadata?.avatar_url && user?.user_metadata?.provider === 'discord' && (
                 <img src={user.user_metadata.avatar_url} alt="Discord" className="w-6 h-6 rounded-full" />
@@ -276,16 +369,6 @@ function AccountContent() {
                   user.user_metadata.full_name : 'Connected'}
               </span>
             </div>
-          ) : (
-            <button
-              onClick={() => supabase.auth.signInWithOAuth({
-                provider: 'discord',
-                options: { redirectTo: `${window.location.origin}/auth/callback` }
-              })}
-              className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition"
-            >
-              Connect
-            </button>
           )}
         </div>
         
@@ -302,20 +385,36 @@ function AccountContent() {
             <span>Steam</span>
           </div>
           
-          {steamLinked ? (
-            <div className="flex items-center space-x-2">
-              {steamAvatar && (
-                <img src={steamAvatar} alt="Steam" className="w-6 h-6 rounded-full" />
-              )}
-              <span className="text-green-500">{steamUsername || 'Connected'}</span>
+          {steamLinked && steamUsername && (
+            <div className="flex flex-col space-y-2 mb-4">
+              <div className="flex items-center space-x-2">
+                <Image 
+                  src="/SteamLogo.png" 
+                  alt="Steam Logo" 
+                  width={32} 
+                  height={32} 
+                  className="w-8 h-8 rounded-full"
+                />
+                <span className="text-white">{steamUsername}</span>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  className="px-3 py-1 text-sm bg-red-600 hover:bg-red-700 text-white rounded"
+                  onClick={handleSteamUnlink}
+                  disabled={unlinkLoading}
+                >
+                  {unlinkLoading ? 'Unlinking...' : 'Unlink'}
+                </button>
+                <button
+                  className="px-3 py-1 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded"
+                  onClick={handleSteamUnlinkAlternative}
+                  disabled={unlinkLoading}
+                  title="Alternative method to unlink account"
+                >
+                  {unlinkLoading ? 'Unlinking...' : 'Unlink (Alt)'}
+                </button>
+              </div>
             </div>
-          ) : (
-            <button
-              onClick={handleSteamLink}
-              className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition"
-            >
-              Connect
-            </button>
           )}
         </div>
       </div>

@@ -36,28 +36,55 @@ export async function POST(request: NextRequest) {
       }, { status: 401 });
     }
     
-    // Update user metadata to remove Steam info using the authorized client
-    const { error: updateError } = await supabase.auth.updateUser({
-      data: {
-        steamId: null,
-        steamUsername: null
-      }
-    });
-    
-    if (updateError) {
-      console.error('Error unlinking Steam account:', updateError);
+    // Use service role for admin operations
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey) {
+      console.error('Missing SUPABASE_SERVICE_ROLE_KEY');
       return NextResponse.json({ 
-        error: 'Failed to unlink Steam account',
-        details: updateError.message 
+        error: 'Server configuration error' 
       }, { status: 500 });
     }
     
-    // Return success response
-    return NextResponse.json({ 
-      success: true,
-      message: 'Steam account unlinked successfully' 
-    });
+    // Create admin client with service role
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
     
+    try {
+      // Use the admin client to update user metadata
+      const { error: updateError } = await adminClient.auth.admin.updateUserById(
+        userData.user.id,
+        {
+          user_metadata: {
+            // Keep existing metadata but remove Steam-related fields
+            ...userData.user.user_metadata,
+            steamId: null, 
+            steamUsername: null
+          }
+        }
+      );
+      
+      if (updateError) {
+        console.error('Error updating user metadata:', updateError);
+        return NextResponse.json({ 
+          error: 'Failed to unlink Steam account',
+          details: updateError.message 
+        }, { status: 500 });
+      }
+      
+      // Log success
+      console.log(`Steam account unlinked successfully for user ${userData.user.id}`);
+      
+      // Return success response
+      return NextResponse.json({ 
+        success: true,
+        message: 'Steam account unlinked successfully' 
+      });
+    } catch (adminError) {
+      console.error('Admin operation error:', adminError);
+      return NextResponse.json({ 
+        error: 'Failed to unlink Steam account',
+        details: adminError instanceof Error ? adminError.message : 'Unknown admin error'
+      }, { status: 500 });
+    }
   } catch (error) {
     console.error('Unexpected error in unlink-steam endpoint:', error);
     return NextResponse.json({ 
