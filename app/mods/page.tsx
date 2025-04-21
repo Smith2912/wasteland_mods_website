@@ -97,6 +97,7 @@ export default function ModsPage() {
   const [steamUsername, setSteamUsername] = useState<string | null>(null);
   const [purchasedMods, setPurchasedMods] = useState<PurchasedMod[]>([]);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [unlinkLoading, setUnlinkLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -171,6 +172,51 @@ export default function ModsPage() {
 
   const handleSteamLink = () => {
     router.push('/api/auth/steam');
+  };
+
+  const handleSteamUnlink = async () => {
+    // Show confirmation dialog
+    if (!confirm('Are you sure you want to unlink your Steam account? You will need to link it again to download mods.')) {
+      return;
+    }
+    
+    try {
+      setUnlinkLoading(true);
+      
+      if (!accessToken) {
+        alert('You need to be logged in to unlink your Steam account.');
+        return;
+      }
+      
+      // Call the API route to unlink Steam account
+      const response = await fetch('/api/auth/unlink-steam', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error unlinking Steam account:', data.error);
+        alert('Failed to unlink Steam account. Please try again.');
+      } else {
+        // Update local state
+        setSteamLinked(false);
+        setSteamUsername(null);
+        alert('Steam account unlinked successfully.');
+        
+        // Refresh the page to show the Steam link screen
+        router.refresh();
+      }
+    } catch (error) {
+      console.error('Error in handleSteamUnlink:', error);
+      alert('An unexpected error occurred. Please try again.');
+    } finally {
+      setUnlinkLoading(false);
+    }
   };
 
   const formatDate = (dateString: string): string => {
@@ -251,13 +297,30 @@ export default function ModsPage() {
           </div>
         </div>
         
-        <div className="mt-4 flex items-center p-3 bg-zinc-700 rounded-md">
-          <svg className="w-5 h-5 text-green-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          <p>
-            <span className="font-semibold">Steam Account Linked:</span> {steamUsername || "Temporary Access Granted"}
-          </p>
+        <div className="mt-4 flex items-center justify-between p-3 bg-zinc-700 rounded-md">
+          <div className="flex items-center">
+            <svg className="w-5 h-5 text-green-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p>
+              <span className="font-semibold">Steam Account Linked:</span> {steamUsername || "Temporary Access Granted"}
+            </p>
+          </div>
+          <button
+            onClick={handleSteamUnlink}
+            disabled={unlinkLoading}
+            className="px-3 py-1 text-sm bg-red-600 hover:bg-red-700 rounded-md transition-colors flex items-center"
+            title="Unlink your Steam account - you'll need to link again to download mods"
+          >
+            {unlinkLoading ? (
+              <span className="h-4 w-4 border-2 border-t-white border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mr-1"></span>
+            ) : (
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            )}
+            Unlink Steam
+          </button>
         </div>
       </div>
       
