@@ -135,12 +135,13 @@ function AccountContent() {
           setSteamUsername(steamUsername || '');
           setSteamAvatar(steamAvatar || '');
         }
-        
-        setLoading(false);
       } else {
-        // No session found, redirect to login
-        router.push('/auth/signin?callbackUrl=/account');
+        // Don't redirect immediately, let the header show the login state
+        console.log('No session found in account page');
       }
+      
+      // Always set loading to false regardless of session state
+      setLoading(false);
     };
     
     getSession();
