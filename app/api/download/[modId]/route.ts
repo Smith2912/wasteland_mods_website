@@ -1,60 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
-import { hasUserPurchasedMod } from '@/app/lib/db';
+import { hasUserPurchasedMod, logModDownload } from '@/app/lib/db';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { modId: string } }
 ) {
   try {
-    // Create a Supabase client using cookies for authentication
-    const cookieStore = cookies();
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
     
-    // Create client with cookies using ssr helper
-    const supabase = createServerClient(
-      supabaseUrl,
-      supabaseKey,
-      {
-        cookies: {
-          get(name) {
-            return cookieStore.get(name)?.value;
-          },
-          set(name, value, options) {
-            // This is an API route, we don't need to set cookies here
-          },
-          remove(name, options) {
-            // This is an API route, we don't need to remove cookies here
-          },
-        },
-      }
-    );
+    // Create standard client
+    const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Get the current session to verify authentication
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // Get auth token - first from query parameter (for direct links)
+    const searchParams = request.nextUrl.searchParams;
+    const tokenFromQuery = searchParams.get('token');
     
-    if (sessionError) {
-      console.error('Error fetching session:', sessionError);
-      return NextResponse.json({ 
-        error: 'Failed to get session',
-        details: sessionError.message
-      }, { status: 500 });
-    }
+    // Then check for header (for API calls)
+    const authHeader = request.headers.get('authorization');
+    const tokenFromHeader = authHeader?.startsWith('Bearer ') 
+      ? authHeader.substring(7) 
+      : null;
     
-    if (!session) {
-      // Redirect to login if not authenticated
+    // Use the first available token
+    const token = tokenFromQuery || tokenFromHeader;
+    
+    // If no token is found, redirect to login
+    if (!token) {
+      console.log('No authentication token found, redirecting to login');
       return NextResponse.redirect(new URL('/auth/signin?callbackUrl=/mods', request.url));
     }
     
+    // Validate the user with their token
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !userData?.user) {
+      console.error('Error validating user token:', userError || 'No user data returned');
+      return NextResponse.redirect(new URL('/auth/signin?callbackUrl=/mods', request.url));
+    }
+    
+    const user = userData.user;
+    
+    // Log user information for debugging authentication sources
+    console.log('User authenticated:', {
+      id: user.id,
+      email: user.email,
+      provider: user.app_metadata?.provider,
+      providers: user.app_metadata?.providers
+    });
+    
     // Verify the user has purchased this mod
     const modId = params.modId;
-    const hasPurchased = await hasUserPurchasedMod(session.user.id, modId);
+    const hasPurchased = await hasUserPurchasedMod(user.id, modId);
     
     if (!hasPurchased) {
-      console.log(`User ${session.user.id} attempted to download mod ${modId} without purchase`);
+      console.log(`User ${user.id} attempted to download mod ${modId} without purchase`);
       return NextResponse.redirect(new URL('/store?error=not_purchased', request.url));
     }
     
@@ -80,15 +81,48 @@ export async function GET(
       console.error('Error generating signed URL:', error);
       return NextResponse.json({ 
         error: 'Failed to generate download link',
+        details: error.message
       }, { status: 500 });
     }
     
-    // Log the download attempt
-    console.log(`User ${session.user.id} downloading mod ${modId}`);
+    if (!data || !data.signedUrl) {
+      console.error('No signed URL was generated');
+      return NextResponse.json({ 
+        error: 'Failed to generate download link',
+        details: 'No signed URL returned'
+      }, { status: 500 });
+    }
+    
+    // Get client IP address
+    const ipAddress = request.headers.get('x-forwarded-for') || '';
+    const userAgent = request.headers.get('user-agent') || '';
+    
+    // Log the download with all user information for tracking
+    await logModDownload(
+      user.id,
+      modId,
+      user.user_metadata,
+      user.app_metadata,
+      ipAddress,
+      userAgent
+    );
+    
+    // Log basic info to console as well
+    console.log(`User ${user.id} downloading mod ${modId}`);
+    
+    // Log authentication details for debugging
+    const steamId = user.user_metadata?.steamId;
+    if (steamId) {
+      console.log(`Steam ID: ${steamId}, Username: ${user.user_metadata?.steamUsername || 'unknown'}`);
+    }
+    
+    const providers = user.app_metadata?.providers || [user.app_metadata?.provider].filter(Boolean);
+    if (providers?.includes('discord')) {
+      console.log(`Discord auth used for download of ${modId}`);
+    }
     
     // Redirect to the signed URL for download
     return NextResponse.redirect(data.signedUrl);
-    
   } catch (error) {
     console.error('Unexpected error in download endpoint:', error);
     return NextResponse.json({ 

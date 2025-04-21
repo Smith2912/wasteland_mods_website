@@ -161,4 +161,84 @@ export async function hasUserPurchasedMod(userId: string, modId: string) {
     console.error('Error in hasUserPurchasedMod:', error);
     return false;
   }
+}
+
+/**
+ * Log a mod download with user's Discord and Steam information
+ */
+export async function logModDownload(
+  userId: string,
+  modId: string,
+  userMetadata: any, 
+  appMetadata: any,
+  ipAddress?: string,
+  userAgent?: string
+) {
+  try {
+    // Extract Steam information
+    const steamId = userMetadata?.steamId || userMetadata?.provider_id;
+    const steamUsername = userMetadata?.steamUsername || userMetadata?.name || userMetadata?.full_name;
+    
+    // Extract Discord information
+    let discordId = null;
+    let discordUsername = null;
+    
+    // Check if the user authenticated with Discord - check multiple possible locations
+    const hasDiscord = 
+      appMetadata?.provider === 'discord' || 
+      (appMetadata?.providers || []).includes('discord') ||
+      userMetadata?.provider === 'discord';
+                       
+    if (hasDiscord) {
+      // Discord ID can be in different locations depending on auth setup
+      discordId = 
+        userMetadata?.sub || 
+        userMetadata?.discord_id || 
+        userMetadata?.provider_id ||
+        (userMetadata?.identities && 
+          userMetadata.identities.find((i: any) => i.provider === 'discord')?.id);
+      
+      // Get Discord username - try multiple possible locations
+      discordUsername = 
+        userMetadata?.full_name || 
+        userMetadata?.name ||
+        userMetadata?.discord_username ||
+        userMetadata?.username ||
+        (userMetadata?.identities && 
+          userMetadata.identities.find((i: any) => i.provider === 'discord')?.identity_data?.full_name);
+    }
+    
+    console.log('Download log data:', {
+      user_id: userId,
+      mod_id: modId,
+      steam_id: steamId,
+      steam_username: steamUsername,
+      discord_id: discordId,
+      discord_username: discordUsername
+    });
+    
+    // Create download log entry
+    const { data, error } = await supabase
+      .from('download_logs')
+      .insert({
+        user_id: userId,
+        mod_id: modId,
+        steam_id: steamId,
+        steam_username: steamUsername,
+        discord_id: discordId,
+        discord_username: discordUsername,
+        ip_address: ipAddress,
+        user_agent: userAgent
+      });
+      
+    if (error) {
+      console.error('Error logging download:', error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error in logModDownload:', error);
+    return false;
+  }
 } 

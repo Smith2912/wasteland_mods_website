@@ -7,6 +7,8 @@ import ModCard from "../components/ModCard";
 import { supabase } from "../lib/supabase";
 import { User } from "@supabase/supabase-js";
 import { getUserPurchases } from "../lib/db";
+import { createClient } from "@supabase/supabase-js";
+import SteamIcon from "../components/SteamIcon";
 
 interface ModDetails {
   id: string;
@@ -94,51 +96,74 @@ export default function ModsPage() {
   const [steamLinked, setSteamLinked] = useState(false);
   const [steamUsername, setSteamUsername] = useState<string | null>(null);
   const [purchasedMods, setPurchasedMods] = useState<PurchasedMod[]>([]);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user) {
-        router.push('/auth/signin?callbackUrl=/mods');
-        return;
-      }
-      
-      setUser(session.user);
-      
-      // Check if user has Steam linked
-      const steamId = session.user.user_metadata?.steamId;
-      if (steamId) {
-        setSteamLinked(true);
-        setSteamUsername(session.user.user_metadata.steamUsername || null);
+      try {
+        setLoading(true);
         
-        // Fetch user's purchased mods
-        try {
-          const purchases = await getUserPurchases(session.user.id);
-          
-          // Map purchases to mods with full details
-          const purchasedModsWithDetails = purchases
-            .map(purchase => {
-              const modDetails = modsMap[purchase.mod_id];
-              if (modDetails) {
-                return {
-                  ...modDetails,
-                  purchaseDate: new Date(purchase.purchase_date).toLocaleDateString(),
-                  transactionId: purchase.transaction_id
-                };
-              }
-              return null;
-            })
-            .filter(mod => mod !== null) as PurchasedMod[];
-          
-          setPurchasedMods(purchasedModsWithDetails);
-        } catch (error) {
-          console.error('Error fetching purchased mods:', error);
+        // Create Supabase client
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+        );
+        
+        // Get current session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error fetching session:', error);
+          setLoading(false);
+          return;
         }
+        
+        if (!session) {
+          router.push('/auth/signin?callbackUrl=/mods');
+          return;
+        }
+        
+        // Store the access token for download links
+        setAccessToken(session.access_token);
+        
+        // Set the user
+        setUser(session.user);
+        
+        // Check if Steam is linked
+        const steamId = session.user.user_metadata?.steamId;
+        const steamUsername = session.user.user_metadata?.steamUsername;
+        
+        setSteamLinked(!!steamId);
+        setSteamUsername(steamUsername || null);
+        
+        // Fetch user's purchases
+        const { data: purchases, error: purchasesError } = await supabase
+          .from('purchases')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .eq('status', 'completed');
+          
+        if (purchasesError) {
+          console.error('Error fetching purchases:', purchasesError);
+        } else if (purchases) {
+          // Map purchases to mods
+          const userPurchasedMods: PurchasedMod[] = purchases.map(purchase => {
+            const modDetails = modsMap[purchase.mod_id];
+            return {
+              ...modDetails,
+              purchaseDate: formatDate(purchase.purchase_date),
+              transactionId: purchase.transaction_id
+            };
+          }).filter(mod => mod.id); // Filter out any null mods (in case we have purchases for mods not in our map)
+          
+          setPurchasedMods(userPurchasedMods);
+        }
+      } catch (error) {
+        console.error('Error in getUser:', error);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
     
     getUser();
@@ -155,6 +180,11 @@ export default function ModsPage() {
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  // Update the downloadUrl function to include the token
+  const getDownloadUrl = (modId: string) => {
+    return `/api/download/${modId}${accessToken ? `?token=${accessToken}` : ''}`;
   };
 
   if (loading) {
@@ -190,9 +220,7 @@ export default function ModsPage() {
               onClick={handleSteamLink}
               className="inline-flex items-center space-x-2 bg-[#171a21] hover:bg-[#2a3f5f] py-3 px-6 rounded-md text-white transition-colors"
             >
-              <svg width="24" height="24" viewBox="0 0 256 259" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid">
-                <path d="M127.778 0C60.522 0 5.212 52.412 0 119.014l68.884 28.561a37.49 37.49 0 0 1 21.609-6.816c.679 0 1.35.023 2.020.067l30.662-44.354a49.373 49.373 0 0 1 2.018-95.88c27.19 0 49.35 22.152 49.35 49.334 0 27.182-22.16 49.334-49.35 49.334-.915 0-1.828-.025-2.732-.078l-43.728 31.22c.036.572.055 1.146.055 1.724 0 20.681-16.846 37.52-37.537 37.52-18.05 0-33.153-12.797-36.75-29.807L5.016 122.425C17.376 199.944 66.918 259 127.778 259c70.57 0 127.777-57.19 127.777-127.724C255.555 57.19 198.348 0 127.778 0zm0 46.365c-15.9 0-28.817 12.913-28.817 28.802 0 15.887 12.917 28.802 28.817 28.802 15.9 0 28.817-12.915 28.817-28.802 0-15.889-12.917-28.802-28.817-28.802zm-98.48 131.815c-10.297 0-18.683-8.414-18.683-18.684 0-10.27 8.386-18.684 18.684-18.684 10.299 0 18.684 8.414 18.684 18.684.001 10.27-8.385 18.684-18.684 18.684z" fill="#FFFFFF"/>
-              </svg>
+              <SteamIcon className="w-5 h-5 mr-2" />
               <span>Connect Steam Account</span>
             </button>
           </div>
@@ -258,7 +286,7 @@ export default function ModsPage() {
               </div>
               <div className="p-4 pt-0 mt-auto">
                 <a 
-                  href={`/api/download/${mod.id}`}
+                  href={getDownloadUrl(mod.id)}
                   className="w-full block text-center py-2 px-4 bg-green-600 hover:bg-green-700 rounded-md transition-colors"
                 >
                   Download
