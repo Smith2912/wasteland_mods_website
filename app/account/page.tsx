@@ -115,8 +115,8 @@ function AccountContent() {
       
       if (currentSession) {
         setSession(currentSession);
-        setIsAuthenticated(true);
         setUser(currentSession.user);
+        setIsAuthenticated(true);
         
         // Check if user has Discord linked
         if (currentSession.user?.app_metadata?.provider === 'discord' ||
@@ -135,9 +135,12 @@ function AccountContent() {
           setSteamUsername(steamUsername || '');
           setSteamAvatar(steamAvatar || '');
         }
+        
+        setLoading(false);
+      } else {
+        // No session found, redirect to login
+        router.push('/auth/signin?callbackUrl=/account');
       }
-      
-      setLoading(false);
     };
     
     getSession();
