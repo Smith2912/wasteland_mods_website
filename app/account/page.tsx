@@ -11,37 +11,41 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import toast from 'react-hot-toast';
 
 // Function to verify and debug authentication providers
-async function debugAuthProviders(userId: string) {
+async function debugAuthProviders(userId: string, client = supabase) {
+  if (!userId) {
+    console.error('No user ID provided for debugging');
+    return { success: false, error: 'No user ID provided' };
+  }
+
   try {
     console.log('🔍 Checking auth providers for user:', userId);
     
-    // This directly queries the auth.users table to verify the user exists
-    const { data: userData, error: userError } = await supabase
-      .from('auth.users')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    // Get user session data directly
+    const { data: sessionData, error: sessionError } = await client.auth.getSession();
+    
+    if (sessionError) {
+      console.error('❌ Error getting session data:', sessionError);
+    } else {
+      console.log('✅ Session data:', sessionData.session ? 'Valid session found' : 'No active session');
+      
+      if (sessionData.session) {
+        console.log('✅ Access token available:', !!sessionData.session.access_token);
+        console.log('✅ User in session:', sessionData.session.user);
+      }
+    }
+    
+    // Get user data
+    const { data: userData, error: userError } = await client.auth.getUser();
     
     if (userError) {
-      console.error('❌ Error querying user data:', userError);
-      
-      // Fallback to checking user identities instead
-      const { data: identities, error: identityError } = await supabase
-        .from('auth.identities')
-        .select('*')
-        .eq('user_id', userId);
-      
-      if (identityError) {
-        console.error('❌ Error querying identity data:', identityError);
-      } else {
-        console.log('✅ User identities found:', identities);
-      }
-    } else {
-      console.log('✅ User record found in database:', userData);
+      console.error('❌ Error getting user data:', userError);
+    } else if (userData) {
+      console.log('✅ User data found:', userData.user);
+      console.log('✅ Auth providers:', userData.user.identities?.map(id => id.provider) || []);
     }
     
     // Check for user purchases
-    const { data: purchases, error: purchasesError } = await supabase
+    const { data: purchases, error: purchasesError } = await client
       .from('purchases')
       .select('*')
       .eq('user_id', userId);
@@ -52,7 +56,12 @@ async function debugAuthProviders(userId: string) {
       console.log(`✅ User has ${purchases?.length || 0} purchases:`, purchases);
     }
     
-    return { success: true };
+    return { 
+      success: true,
+      userData: userData?.user,
+      providers: userData?.user?.identities?.map(id => id.provider) || [],
+      purchases: purchases
+    };
   } catch (error) {
     console.error('❌ Error in debugAuthProviders:', error);
     return { success: false, error };
@@ -60,12 +69,25 @@ async function debugAuthProviders(userId: string) {
 }
 
 // Helper to call the auth verify API endpoint
-async function verifyAuthStatus() {
+async function verifyAuthStatus(token: string | null) {
   try {
-    const response = await fetch('/api/auth/verify');
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status} ${response.statusText}`);
+    if (!token) {
+      return { error: 'No access token available' };
     }
+    
+    const response = await fetch('/api/auth/verify', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      return { 
+        error: `Error: ${response.status} ${response.statusText}`,
+        details: await response.text()
+      };
+    }
+    
     return await response.json();
   } catch (error) {
     console.error('Failed to verify auth status:', error);
@@ -100,89 +122,99 @@ function AccountContent() {
   const steamPending = searchParams.get('steamPending');
   const pendingSteamUsername = searchParams.get('steamUsername');
   
-  const supabase = createClientComponentClient();
+  const supabaseClient = createClientComponentClient();
   
   // Use effect to check if user is authenticated and get session
   useEffect(() => {
     const getSession = async () => {
-      const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error('Error getting session:', error);
+      try {
+        setLoading(true);
+        
+        // Get current session using the client component client
+        const { data: { session: currentSession }, error } = await supabaseClient.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          setLoading(false);
+          return;
+        }
+        
+        console.log("Session check result:", currentSession ? "Session found" : "No session found");
+        
+        if (currentSession) {
+          // Save the access token for API calls
+          setAccessToken(currentSession.access_token);
+          
+          // Set session and user data
+          setSession(currentSession);
+          setUser(currentSession.user);
+          setIsAuthenticated(true);
+          
+          // Set auth providers array from identities
+          const providers = currentSession.user?.identities?.map(identity => identity.provider) || [];
+          setAuthProviders(providers);
+          
+          // Check if user has Discord linked
+          const hasDiscordProvider = providers.includes('discord') || 
+                                     currentSession.user?.app_metadata?.provider === 'discord';
+          
+          if (hasDiscordProvider) {
+            setDiscordLinked(true);
+            setDiscordUsername(currentSession.user?.user_metadata?.discord_username || 
+                               currentSession.user?.user_metadata?.full_name || '');
+          }
+          
+          // Check if user has Steam linked via user metadata
+          const steamId = currentSession.user?.user_metadata?.steamId;
+          const steamUsername = currentSession.user?.user_metadata?.steamUsername;
+          const steamAvatar = currentSession.user?.user_metadata?.steamAvatar;
+          
+          if (steamId) {
+            setSteamLinked(true);
+            setSteamUsername(steamUsername || '');
+            setSteamAvatar(steamAvatar || '');
+          }
+          
+          // Debug the session and user data
+          console.log("User data:", currentSession.user);
+          console.log("Auth providers:", providers);
+          
+          // Run debug check if in debug mode
+          if (debugMode) {
+            debugAuthProviders(currentSession.user.id);
+          }
+        }
+      } catch (err) {
+        console.error("Session retrieval error:", err);
+      } finally {
         setLoading(false);
-        return;
       }
-      
-      if (currentSession) {
-        setSession(currentSession);
-        setUser(currentSession.user);
-        setIsAuthenticated(true);
-        
-        // Check if user has Discord linked
-        if (currentSession.user?.app_metadata?.provider === 'discord' ||
-            currentSession.user?.identities?.some(identity => identity.provider === 'discord')) {
-          setDiscordLinked(true);
-          setDiscordUsername(currentSession.user?.user_metadata?.discord_username || '');
-        }
-        
-        // Check if user has Steam linked via user metadata
-        const steamId = currentSession.user?.user_metadata?.steamId;
-        const steamUsername = currentSession.user?.user_metadata?.steamUsername;
-        const steamAvatar = currentSession.user?.user_metadata?.steamAvatar;
-        
-        if (steamId) {
-          setSteamLinked(true);
-          setSteamUsername(steamUsername || '');
-          setSteamAvatar(steamAvatar || '');
-        }
-      } else {
-        // Don't redirect immediately, let the header show the login state
-        console.log('No session found in account page');
-      }
-      
-      // Always set loading to false regardless of session state
-      setLoading(false);
     };
     
     getSession();
     
     // Subscribe to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, newSession) => {
+      console.log("Auth state changed:", _event);
       setSession(newSession);
       setIsAuthenticated(!!newSession);
       
       if (newSession?.user) {
-        // Update Discord status
-        if (newSession.user?.app_metadata?.provider === 'discord' ||
-            newSession.user?.identities?.some(identity => identity.provider === 'discord')) {
-          setDiscordLinked(true);
-          setDiscordUsername(newSession.user?.user_metadata?.discord_username || '');
-        } else {
-          setDiscordLinked(false);
-          setDiscordUsername('');
-        }
+        setUser(newSession.user);
         
-        // Update Steam status
-        const steamId = newSession.user?.user_metadata?.steamId;
-        const steamUsername = newSession.user?.user_metadata?.steamUsername;
-        const steamAvatar = newSession.user?.user_metadata?.steamAvatar;
-        
-        if (steamId) {
-          setSteamLinked(true);
-          setSteamUsername(steamUsername || '');
-          setSteamAvatar(steamAvatar || '');
-        } else {
-          setSteamLinked(false);
-          setSteamUsername('');
-          setSteamAvatar('');
-        }
+        // Update providers
+        const providers = newSession.user?.identities?.map(identity => identity.provider) || [];
+        setAuthProviders(providers);
+      } else {
+        setUser(null);
+        setAuthProviders([]);
       }
     });
     
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase.auth]);
+  }, [supabaseClient.auth, debugMode]);
   
   const handleSteamLink = () => {
     router.push('/api/auth/steam');
@@ -191,7 +223,7 @@ function AccountContent() {
   const handleVerifyAuth = async () => {
     setVerifyLoading(true);
     try {
-      const result = await verifyAuthStatus();
+      const result = await verifyAuthStatus(accessToken);
       setVerifyInfo(result);
     } catch (error) {
       console.error('Verification failed:', error);
