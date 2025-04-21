@@ -256,9 +256,13 @@ function AccountContent() {
         {/* Discord account */}
         <div className="flex items-center justify-between mb-4 p-2 bg-gray-700 rounded">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 flex items-center justify-center bg-[#5865F2] rounded-full">
-              <span>D</span>
-            </div>
+            <Image 
+              src="/DiscordLogo.png" 
+              alt="Discord Logo" 
+              width={32} 
+              height={32} 
+              className="w-8 h-8 rounded-full"
+            />
             <span>Discord</span>
           </div>
           
@@ -288,9 +292,13 @@ function AccountContent() {
         {/* Steam account */}
         <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 flex items-center justify-center bg-[#231f20] rounded-full">
-              <span>S</span>
-            </div>
+            <Image 
+              src="/SteamLogo.png" 
+              alt="Steam Logo" 
+              width={32} 
+              height={32} 
+              className="w-8 h-8 rounded-full"
+            />
             <span>Steam</span>
           </div>
           
