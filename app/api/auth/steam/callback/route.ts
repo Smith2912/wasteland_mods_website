@@ -10,10 +10,12 @@ export async function GET(request: NextRequest) {
     // Get parameters from the URL
     const searchParams = request.nextUrl.searchParams;
     const claimedId = searchParams.get('openid.claimed_id');
+    // Get the callback URL if provided
+    const callbackUrl = searchParams.get('callbackUrl') || '/account';
     
     if (!claimedId) {
       console.error("❌ No claimed_id in Steam response");
-      return NextResponse.redirect(new URL('/account?error=steam_auth_failed', request.url));
+      return NextResponse.redirect(new URL(`/account?error=steam_auth_failed&callbackUrl=${encodeURIComponent(callbackUrl)}`, request.url));
     }
     
     // Extract Steam ID from claimed_id
@@ -21,7 +23,7 @@ export async function GET(request: NextRequest) {
     
     if (!steamId) {
       console.error("❌ Failed to extract Steam ID from", claimedId);
-      return NextResponse.redirect(new URL('/account?error=invalid_steam_id', request.url));
+      return NextResponse.redirect(new URL(`/account?error=invalid_steam_id&callbackUrl=${encodeURIComponent(callbackUrl)}`, request.url));
     }
     
     console.log("✅ Steam ID extracted:", steamId);
@@ -29,7 +31,7 @@ export async function GET(request: NextRequest) {
     // Validate Steam API key
     if (!STEAM_API_KEY) {
       console.error("❌ Missing STEAM_API_KEY environment variable");
-      return NextResponse.redirect(new URL('/account?error=steam_api_configuration', request.url));
+      return NextResponse.redirect(new URL(`/account?error=steam_api_configuration&callbackUrl=${encodeURIComponent(callbackUrl)}`, request.url));
     }
     
     // Fetch user profile from Steam API
@@ -45,7 +47,7 @@ export async function GET(request: NextRequest) {
       
       if (!data.response || !data.response.players || !data.response.players.length) {
         console.error("❌ Steam API returned no player data");
-        return NextResponse.redirect(new URL('/account?error=steam_profile_not_found', request.url));
+        return NextResponse.redirect(new URL(`/account?error=steam_profile_not_found&callbackUrl=${encodeURIComponent(callbackUrl)}`, request.url));
       }
       
       const steamProfile = data.response.players[0];
@@ -59,7 +61,7 @@ export async function GET(request: NextRequest) {
       
       if (sessionError) {
         console.error("❌ Error getting Supabase session:", sessionError);
-        return NextResponse.redirect(new URL('/account?error=auth_session_error', request.url));
+        return NextResponse.redirect(new URL(`/account?error=auth_session_error&callbackUrl=${encodeURIComponent(callbackUrl)}`, request.url));
       }
       
       if (!session?.user) {
@@ -67,7 +69,7 @@ export async function GET(request: NextRequest) {
         // If no user is logged in, redirect to login and save the Steam ID in query param
         // This can be handled later to complete the linking process after login
         return NextResponse.redirect(
-          new URL(`/account?steamPending=${steamId}&steamUsername=${encodeURIComponent(steamProfile.personaname || '')}`, 
+          new URL(`/account?steamPending=${steamId}&steamUsername=${encodeURIComponent(steamProfile.personaname || '')}&callbackUrl=${encodeURIComponent(callbackUrl)}`, 
           request.url)
         );
       }
@@ -84,16 +86,21 @@ export async function GET(request: NextRequest) {
       
       if (updateError) {
         console.error("❌ Error updating user data:", updateError);
-        return NextResponse.redirect(new URL('/account?error=steam_link_failed', request.url));
+        return NextResponse.redirect(new URL(`/account?error=steam_link_failed&callbackUrl=${encodeURIComponent(callbackUrl)}`, request.url));
       }
       
       console.log("✅ Successfully linked Steam account for user", session.user.id);
       
-      // Redirect back to account page with success message
-      return NextResponse.redirect(new URL('/account?steam=linked', request.url));
+      // Redirect back to the original callbackUrl or account page with success message
+      // Check if callbackUrl is different from the default account page
+      if (callbackUrl && callbackUrl !== '/account') {
+        return NextResponse.redirect(new URL(callbackUrl, request.url));
+      } else {
+        return NextResponse.redirect(new URL('/account?steam=linked', request.url));
+      }
     } catch (steamApiError) {
       console.error("❌ Steam API error:", steamApiError);
-      return NextResponse.redirect(new URL('/account?error=steam_api_error', request.url));
+      return NextResponse.redirect(new URL(`/account?error=steam_api_error&callbackUrl=${encodeURIComponent(callbackUrl)}`, request.url));
     }
   } catch (error) {
     console.error("❌ Error linking Steam account:", error);

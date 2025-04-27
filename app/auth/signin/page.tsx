@@ -15,14 +15,17 @@ function SignInContent() {
     steam: false
   });
   const [authError, setAuthError] = useState<string | null>(error);
-  const supabase = createBrowserClient();
+  // Use useState with initializer to ensure client is created only once
+  const [supabase] = useState(() => createBrowserClient());
 
   useEffect(() => {
     // Check if user is already authenticated
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      console.log('Current session check:', session ? 'User is authenticated' : 'No session found');
       if (session) {
         // User is already signed in, redirect to the callback url
+        console.log('Redirecting to:', callbackUrl);
         router.push(callbackUrl);
       }
     };
@@ -39,7 +42,8 @@ function SignInContent() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          // Include the callbackUrl as a query parameter to maintain context after auth
+          redirectTo: `${window.location.origin}/auth/callback?callbackUrl=${encodeURIComponent(callbackUrl)}`,
         },
       });
       
@@ -64,7 +68,8 @@ function SignInContent() {
       setIsLoading({...isLoading, steam: true});
       setAuthError(null);
       console.log('Starting Steam sign-in process...');
-      router.push('/api/auth/steam');
+      // Add callbackUrl to maintain context
+      router.push(`/api/auth/steam?callbackUrl=${encodeURIComponent(callbackUrl)}`);
     } catch (err) {
       console.error('Unexpected error during Steam sign-in:', err);
       setAuthError('An unexpected error occurred. Please try again.');

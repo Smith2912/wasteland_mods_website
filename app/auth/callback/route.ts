@@ -7,6 +7,8 @@ export async function GET(request: NextRequest) {
   // Get the code from the URL
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
+  // Get the callback URL if provided
+  const callbackUrl = requestUrl.searchParams.get('callbackUrl') || '/account';
   
   if (!code) {
     console.error('No code provided in callback URL');
@@ -28,11 +30,15 @@ export async function GET(request: NextRequest) {
     // Successfully exchanged code for session
     console.log('Successfully authenticated user');
     
+    // Get the session to verify it worked
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('Session after exchange:', session ? 'Valid session created' : 'No session created');
+    
   } catch (error) {
     console.error('Error in auth callback:', error);
     return NextResponse.redirect(new URL('/auth/error', request.url));
   }
 
-  // URL to redirect to after sign in process completes
-  return NextResponse.redirect(new URL('/account', request.url));
+  // URL to redirect to after sign in process completes - use the provided callbackUrl
+  return NextResponse.redirect(new URL(callbackUrl, request.url));
 } 

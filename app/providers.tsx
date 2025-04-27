@@ -26,12 +26,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [supabase] = useState(() => createBrowserClient());
 
   useEffect(() => {
-    // Initialize Supabase client once at the root level
-    if (typeof window !== 'undefined') {
-      console.log('Providers: Ensuring Supabase client is initialized');
-      createBrowserClient();
-    }
-    
     // Get initial session
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
