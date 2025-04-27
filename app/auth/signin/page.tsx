@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { supabase } from '../../lib/supabase';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 // Component with search params hook
 function SignInContent() {
@@ -15,6 +15,20 @@ function SignInContent() {
     steam: false
   });
   const [authError, setAuthError] = useState<string | null>(error);
+  const supabase = createClientComponentClient();
+
+  useEffect(() => {
+    // Check if user is already authenticated
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // User is already signed in, redirect to the callback url
+        router.push(callbackUrl);
+      }
+    };
+    
+    checkAuth();
+  }, [callbackUrl, router, supabase]);
 
   const handleDiscordSignIn = async () => {
     try {
@@ -25,7 +39,7 @@ function SignInContent() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       

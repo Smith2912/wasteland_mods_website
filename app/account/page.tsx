@@ -215,6 +215,16 @@ function AccountContent() {
     }
   };
   
+  // Function to handle sign in
+  const handleSignIn = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'discord',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+  };
+  
   // Show loading state
   if (loading) {
     return (
@@ -236,7 +246,7 @@ function AccountContent() {
           <p className="font-semibold">Authentication Error</p>
           <p>{authError}</p>
           <button 
-            onClick={() => router.push('/auth/signin?callbackUrl=/account')}
+            onClick={handleSignIn}
             className="mt-2 bg-white text-red-500 px-4 py-2 rounded-md font-semibold"
           >
             Sign In
@@ -254,7 +264,7 @@ function AccountContent() {
         <div className="bg-gray-800 p-6 rounded-lg text-center">
           <h2 className="text-xl mb-4">Please sign in to view your account</h2>
           <button 
-            onClick={() => router.push('/auth/signin')}
+            onClick={handleSignIn}
             className="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold"
           >
             Sign In

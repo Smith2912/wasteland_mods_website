@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 // Get environment variables with fallbacks to prevent runtime errors
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -14,7 +15,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    storageKey: 'supabase-auth-token',
   }
 });
+
+// We export this function for cases where we need to use cookie-based auth
+export const createBrowserClient = () => {
+  return createClientComponentClient();
+};
 
 export default supabase; 

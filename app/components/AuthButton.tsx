@@ -44,9 +44,15 @@ export default function AuthButton() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setDropdownOpen(false);
-    router.refresh();
+    try {
+      await supabase.auth.signOut();
+      setDropdownOpen(false);
+      router.push('/');
+      // Force a page refresh to clear any cached state
+      window.location.reload();
+    } catch (error) {
+      console.error("Sign out error:", error);
+    }
   };
 
   if (loading) {
