@@ -13,11 +13,23 @@ export async function GET(request: NextRequest) {
   if (code) {
     try {
       // Exchange the code for a session
-      await supabase.auth.exchangeCodeForSession(code);
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      
+      if (error) {
+        console.error('Error exchanging code for session:', error);
+        return NextResponse.redirect(new URL('/auth/error', request.url));
+      }
+      
+      // Successfully exchanged code for session
+      console.log('Successfully authenticated user');
+      
     } catch (error) {
       console.error('Error exchanging code for session:', error);
       return NextResponse.redirect(new URL('/auth/error', request.url));
     }
+  } else {
+    console.error('No code provided in callback URL');
+    return NextResponse.redirect(new URL('/auth/error?error=no_code', request.url));
   }
 
   // URL to redirect to after sign in process completes

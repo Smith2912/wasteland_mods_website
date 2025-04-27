@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from "next/link";
@@ -36,66 +36,85 @@ function AccountContent() {
   const steamSuccess = searchParams.get('steam') === 'linked';
   const steamError = searchParams.get('error');
   
-  useEffect(() => {
-    // Function to load user data and connections
-    async function loadUserData() {
-      try {
+  // Function to load user data and connections
+  const loadUserData = useCallback(async (skipLoadingState = false) => {
+    try {
+      if (!skipLoadingState) {
         setLoading(true);
-        setAuthError(null);
-        
-        // First, get the current session
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error("Session error:", error.message);
-          setAuthError(error.message);
-          setLoading(false);
-          return;
-        }
-        
-        if (!session) {
-          console.log("No active session found");
-          setSession(null);
-          setUser(null);
-          setLoading(false);
-          return;
-        }
-        
-        // We have a session, set it
-        setSession(session);
-        setUser(session.user);
-        
-        console.log("User authenticated:", session.user?.id);
-        
-        // Check Discord connection
-        const isDiscordLinked = 
-          session.user?.identities?.some(id => id.provider === 'discord') ||
-          session.user?.app_metadata?.provider === 'discord';
-        
-        setDiscordLinked(isDiscordLinked);
-        setDiscordUsername(
-          session.user?.user_metadata?.discord_username || 
-          session.user?.user_metadata?.full_name || 
-          (isDiscordLinked ? session.user?.user_metadata?.full_name : null)
-        );
-        
-        // Check Steam connection
-        const steamId = session.user?.user_metadata?.steamId;
-        setSteamLinked(!!steamId);
-        setSteamUsername(session.user?.user_metadata?.steamUsername || null);
-        
-        // Load debugging data if in debug mode
-        if (debugMode) {
-          await refreshDebugData();
-        }
-      } catch (err) {
-        console.error("Error loading user data:", err);
-        setAuthError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
       }
+      setAuthError(null);
+      
+      // First, get the current session
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error("Session error:", error.message);
+        setAuthError(error.message);
+        setLoading(false);
+        return;
+      }
+      
+      if (!session) {
+        console.log("No active session found");
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      
+      // We have a session, set it
+      setSession(session);
+      setUser(session.user);
+      
+      console.log("User authenticated:", session.user?.id);
+      
+      // Check Discord connection
+      const isDiscordLinked = 
+        session.user?.identities?.some(id => id.provider === 'discord') ||
+        session.user?.app_metadata?.provider === 'discord';
+      
+      setDiscordLinked(isDiscordLinked);
+      setDiscordUsername(
+        session.user?.user_metadata?.discord_username || 
+        session.user?.user_metadata?.full_name || 
+        (isDiscordLinked ? session.user?.user_metadata?.full_name : null)
+      );
+      
+      // Check Steam connection
+      const steamId = session.user?.user_metadata?.steamId;
+      setSteamLinked(!!steamId);
+      setSteamUsername(session.user?.user_metadata?.steamUsername || null);
+      
+      // Load debugging data if in debug mode
+      if (debugMode) {
+        await refreshDebugData();
+      }
+    } catch (err) {
+      console.error("Error loading user data:", err);
+      setAuthError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoading(false);
     }
+  }, [supabase, debugMode]);
+  
+  // Handle visibility change to refresh data when tab becomes visible again
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // When tab becomes visible again, refresh data but don't show loading spinner
+        loadUserData(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadUserData]);
+  
+  useEffect(() => {
+    // Load user data initially
     loadUserData();
     
     // Set up auth state listener
@@ -127,7 +146,17 @@ function AccountContent() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase, router, debugMode]);
+  }, [supabase, router, loadUserData]);
+  
+  // Function to handle sign in
+  const handleSignIn = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'discord',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+  };
   
   // Function to refresh debug data
   async function refreshDebugData() {
@@ -215,14 +244,9 @@ function AccountContent() {
     }
   };
   
-  // Function to handle sign in
-  const handleSignIn = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'discord',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+  // Add a button to retry loading if stuck
+  const handleRetryLoading = () => {
+    loadUserData();
   };
   
   // Show loading state
@@ -230,8 +254,14 @@ function AccountContent() {
     return (
       <div className="container mx-auto p-4">
         <h1 className="text-2xl font-bold mb-4">Account</h1>
-        <div className="flex justify-center items-center min-h-[300px]">
-          <div className="h-12 w-12 border-4 border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+        <div className="flex flex-col justify-center items-center min-h-[300px]">
+          <div className="h-12 w-12 border-4 border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mb-4"></div>
+          <button 
+            onClick={handleRetryLoading}
+            className="mt-4 text-sm text-gray-400 hover:text-white"
+          >
+            Loading is taking too long? Click to retry
+          </button>
         </div>
       </div>
     );

@@ -15,7 +15,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    storageKey: 'supabase-auth-token',
+    // Make sure we're using browser's localStorage for persistent auth
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'supabase-auth',
+    // Cross-tab synchronization
+    detectSessionInUrl: true,
+    flowType: 'implicit',
   }
 });
 

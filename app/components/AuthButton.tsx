@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User } from '@supabase/supabase-js';
 import Link from "next/link";
 import Image from "next/image";
@@ -14,42 +14,66 @@ export default function AuthButton() {
   const router = useRouter();
   const supabase = createClientComponentClient();
 
-  useEffect(() => {
-    const getUser = async () => {
+  const getUser = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
+    try {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user ?? null);
+    } catch (error) {
+      console.error('Error fetching user:', error);
+    } finally {
       setLoading(false);
-      
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        (_event, session) => {
-          setUser(session?.user ?? null);
-        }
-      );
-      
-      return () => {
-        subscription.unsubscribe();
-      };
-    };
-    
-    getUser();
+    }
   }, [supabase]);
 
+  useEffect(() => {
+    getUser();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+    
+    // Set up visibility change listener to refresh auth state
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Don't show loading indicator for visibility-triggered refreshes
+        getUser(false);
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [supabase, getUser]);
+
   const handleSignIn = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'discord',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    try {
+      await supabase.auth.signInWithOAuth({
+        provider: 'discord',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+    } catch (error) {
+      console.error('Sign in error:', error);
+    }
   };
 
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
       setDropdownOpen(false);
+      setUser(null);
       router.push('/');
       // Force a page refresh to clear any cached state
-      window.location.reload();
+      window.location.href = '/';
     } catch (error) {
       console.error("Sign out error:", error);
     }
