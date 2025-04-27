@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '../../../../lib/supabase';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 // Steam API configuration
 const STEAM_API_KEY = process.env.STEAM_API_KEY;
@@ -50,6 +51,9 @@ export async function GET(request: NextRequest) {
       const steamProfile = data.response.players[0];
       console.log("✅ Successfully retrieved Steam profile for:", steamProfile.personaname);
     
+      // Create a Supabase client for this route handler
+      const supabase = createRouteHandlerClient({ cookies });
+      
       // Get the current Supabase session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
