@@ -5,14 +5,14 @@ import { User } from '@supabase/supabase-js';
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '../lib/supabase';
 
 export default function AuthButton() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient();
 
   const getUser = useCallback(async (showLoading = true) => {
     if (showLoading) {

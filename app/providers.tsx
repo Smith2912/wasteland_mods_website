@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { Session } from "@supabase/supabase-js";
 import { CartProvider } from './context/CartContext';
 import { Toaster } from 'react-hot-toast';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from './lib/supabase';
 
 // Create a context for the Supabase session
 const AuthContext = createContext<{
@@ -21,7 +21,7 @@ export const useAuth = () => useContext(AuthContext);
 export function Providers({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient();
 
   useEffect(() => {
     // Get initial session

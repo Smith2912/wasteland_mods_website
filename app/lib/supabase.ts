@@ -10,23 +10,30 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ Missing required Supabase environment variables');
 }
 
-// Create a single, consistent Supabase client instance
+// IMPORTANT: Only use this client for server components or API routes
+// For client-side components, use createBrowserClient() instead
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    // Make sure we're using browser's localStorage for persistent auth
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-    storageKey: 'supabase-auth',
-    // Cross-tab synchronization
-    detectSessionInUrl: true,
-    flowType: 'implicit',
   }
 });
 
-// We export this function for cases where we need to use cookie-based auth
+// This is the preferred way to get a client instance in client components
+// to avoid the "Multiple GoTrueClient instances" warning
+let browserClient: ReturnType<typeof createClientComponentClient> | null = null;
+
 export const createBrowserClient = () => {
-  return createClientComponentClient();
+  if (typeof window === 'undefined') {
+    // We're on the server, return a new instance
+    return createClientComponentClient();
+  }
+  
+  // We're in the browser, return or create a singleton
+  if (!browserClient) {
+    browserClient = createClientComponentClient();
+  }
+  return browserClient;
 };
 
 export default supabase; 

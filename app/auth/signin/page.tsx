@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '../../lib/supabase';
 
 // Component with search params hook
 function SignInContent() {
@@ -15,7 +15,7 @@ function SignInContent() {
     steam: false
   });
   const [authError, setAuthError] = useState<string | null>(error);
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient();
 
   useEffect(() => {
     // Check if user is already authenticated

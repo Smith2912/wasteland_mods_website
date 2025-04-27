@@ -5,7 +5,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from "next/link";
 import Image from "next/image";
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
 // Separate component that uses useSearchParams
@@ -30,7 +30,7 @@ function AccountContent() {
   
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient();
   
   // Handle query parameters
   const steamSuccess = searchParams.get('steam') === 'linked';
