@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { Session } from "@supabase/supabase-js";
+import { Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { CartProvider } from './context/CartContext';
 import { Toaster } from 'react-hot-toast';
 import { createBrowserClient } from './lib/supabase';
@@ -21,9 +21,17 @@ export const useAuth = () => useContext(AuthContext);
 export function Providers({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = createBrowserClient();
+  
+  // Create supabase client once at component mount
+  const [supabase] = useState(() => createBrowserClient());
 
   useEffect(() => {
+    // Initialize Supabase client once at the root level
+    if (typeof window !== 'undefined') {
+      console.log('Providers: Ensuring Supabase client is initialized');
+      createBrowserClient();
+    }
+    
     // Get initial session
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -35,7 +43,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event: AuthChangeEvent, session: Session | null) => {
         setSession(session);
       }
     );
