@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
   const supabase = createRouteHandlerClient({ cookies });
 
   try {
+    console.log('Exchange code for session - starting');
     // Exchange the code for a session
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     
@@ -32,13 +33,31 @@ export async function GET(request: NextRequest) {
     
     // Get the session to verify it worked
     const { data: { session } } = await supabase.auth.getSession();
-    console.log('Session after exchange:', session ? 'Valid session created' : 'No session created');
+    if (session) {
+      console.log('Session after exchange: Valid session created');
+      console.log('User ID:', session.user.id);
+      
+      // Check if expires_at is defined
+      if (session.expires_at) {
+        console.log('Session expires at:', new Date(session.expires_at * 1000).toISOString());
+      } else {
+        console.log('Session expiration time not available');
+      }
+      
+      // Make sure cookies are properly set
+      const res = NextResponse.redirect(new URL(callbackUrl, request.url));
+      
+      // Add debug headers (these won't be visible to users but help with debugging)
+      res.headers.set('X-Auth-Debug', 'Session successfully created');
+      
+      return res;
+    } else {
+      console.error('No session after exchange - this should not happen');
+      return NextResponse.redirect(new URL('/auth/error?error=no_session_after_exchange', request.url));
+    }
     
   } catch (error) {
     console.error('Error in auth callback:', error);
     return NextResponse.redirect(new URL('/auth/error', request.url));
   }
-
-  // URL to redirect to after sign in process completes - use the provided callbackUrl
-  return NextResponse.redirect(new URL(callbackUrl, request.url));
 } 

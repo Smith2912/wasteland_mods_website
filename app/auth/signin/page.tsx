@@ -18,6 +18,35 @@ function SignInContent() {
   // Use useState with initializer to ensure client is created only once
   const [supabase] = useState(() => createBrowserClient());
 
+  // Debug auth state
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      console.log('== Auth Debugging ==');
+      console.log('Cookies present:', document.cookie.length > 0);
+      console.log('Local storage auth token:', 
+        localStorage.getItem('supabase.auth.token') ? 'Present' : 'Missing');
+      
+      const debug = async () => {
+        const { data } = await supabase.auth.getSession();
+        console.log('Get session result:', data.session ? 'Valid session' : 'No session');
+        
+        if (data.session) {
+          // Check token expiry
+          const expiresAt = data.session.expires_at;
+          if (expiresAt) {
+            const expiryDate = new Date(expiresAt * 1000);
+            const now = new Date();
+            console.log(`Token expires: ${expiryDate.toISOString()}`);
+            console.log(`Current time: ${now.toISOString()}`);
+            console.log(`Token ${expiryDate > now ? 'is still valid' : 'has expired'}`);
+          }
+        }
+      };
+      
+      debug();
+    }
+  }, [supabase]);
+
   useEffect(() => {
     // Check if user is already authenticated
     const checkAuth = async () => {
