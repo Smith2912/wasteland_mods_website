@@ -1,17 +1,18 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from 'next/navigation';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export default function AuthButton() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const router = useRouter();
+  const supabase = createClientComponentClient();
 
   useEffect(() => {
     const getUser = async () => {
@@ -31,7 +32,7 @@ export default function AuthButton() {
     };
     
     getUser();
-  }, []);
+  }, [supabase]);
 
   const handleSignIn = async () => {
     await supabase.auth.signInWithOAuth({

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, Suspense } from 'react';
-import { supabase } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from "next/link";
@@ -76,6 +75,7 @@ function AccountContent() {
         setDiscordLinked(isDiscordLinked);
         setDiscordUsername(
           session.user?.user_metadata?.discord_username || 
+          session.user?.user_metadata?.full_name || 
           (isDiscordLinked ? session.user?.user_metadata?.full_name : null)
         );
         
@@ -254,7 +254,7 @@ function AccountContent() {
         <div className="bg-gray-800 p-6 rounded-lg text-center">
           <h2 className="text-xl mb-4">Please sign in to view your account</h2>
           <button 
-            onClick={() => router.push('/auth/signin?callbackUrl=/account')}
+            onClick={() => router.push('/auth/signin')}
             className="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold"
           >
             Sign In
@@ -431,17 +431,18 @@ function AccountContent() {
   );
 }
 
-// Loading fallback component
+// Loading component to use in suspense
 function AccountLoading() {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Account</h1>
-      <div className="animate-pulse">Loading account information...</div>
+      <div className="flex justify-center items-center min-h-[300px]">
+        <div className="h-12 w-12 border-4 border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+      </div>
     </div>
   );
 }
 
-// Main component with Suspense boundary
 export default function AccountPage() {
   return (
     <Suspense fallback={<AccountLoading />}>

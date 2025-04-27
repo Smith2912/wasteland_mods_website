@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
-  // Create a Supabase client configured to use cookies
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
   // Get the code from the URL
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
+  
+  // Create a Supabase client configured to use cookies
+  const supabase = createRouteHandlerClient({ cookies });
 
   if (code) {
     try {
