@@ -1,57 +1,87 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { Session, AuthChangeEvent } from "@supabase/supabase-js";
+import { 
+  createClientComponentClient, 
+  Session 
+} from '@supabase/auth-helpers-nextjs';
+import { useRouter } from 'next/navigation';
 import { CartProvider } from './context/CartContext';
 import { Toaster } from 'react-hot-toast';
-import { createBrowserClient } from './lib/supabase';
 
-// Create a context for the Supabase session
-const AuthContext = createContext<{
+type AuthContextType = {
   session: Session | null;
   isLoading: boolean;
-}>({
+};
+
+const AuthContext = createContext<AuthContextType>({
   session: null,
-  isLoading: true,
+  isLoading: true
 });
 
-// Hook to use the auth context
 export const useAuth = () => useContext(AuthContext);
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Create supabase client once at component mount
-  const [supabase] = useState(() => createBrowserClient());
+  const supabase = createClientComponentClient();
+  const router = useRouter();
 
   useEffect(() => {
-    // Get initial session
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setIsLoading(false);
+    // Function to get and set the session
+    const initializeAuth = async () => {
+      try {
+        // Get the initial session
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        
+        if (initialSession) {
+          console.log('Initial session found:', initialSession.user.id);
+          setSession(initialSession);
+        } else {
+          console.log('No initial session found');
+          setSession(null);
+        }
+      } catch (error) {
+        console.error('Error getting initial session:', error);
+        setSession(null);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    getSession();
+    // Initialize auth on component mount
+    initializeAuth();
 
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event: AuthChangeEvent, session: Session | null) => {
-        setSession(session);
+    // Set up the auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
+      console.log('Auth state changed:', event, currentSession?.user?.id);
+      
+      // Update session state
+      setSession(currentSession);
+      
+      // If we just signed in, refresh the page to update server components
+      if (event === 'SIGNED_IN') {
+        console.log('User signed in, refreshing router');
+        router.refresh();
       }
-    );
+      
+      // If we just signed out, refresh the page to update server components
+      if (event === 'SIGNED_OUT') {
+        console.log('User signed out, refreshing router');
+        router.refresh();
+      }
+    });
 
-    // Cleanup
+    // Clean up the subscription when the component unmounts
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [supabase, router]);
 
   return (
     <AuthContext.Provider value={{ session, isLoading }}>
       <CartProvider>
-        <Toaster position="top-center" />
+        <Toaster position="bottom-right" />
         {children}
       </CartProvider>
     </AuthContext.Provider>
