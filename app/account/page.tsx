@@ -68,17 +68,29 @@ function AccountContent() {
       
       console.log("User authenticated:", session.user?.id);
       
-      // Check Discord connection
-      const isDiscordLinked = 
-        session.user?.identities?.some(id => id.provider === 'discord') ||
-        session.user?.app_metadata?.provider === 'discord';
+      // Check Discord connection - handle potential undefined values safely
+      let isDiscordLinked = false;
+      
+      // Check if the identities array exists and has a Discord provider
+      if (session.user?.identities && session.user.identities.length > 0) {
+        isDiscordLinked = session.user.identities.some((id: { provider: string }) => id.provider === 'discord');
+      }
+      
+      // Fall back to app_metadata if identities doesn't have Discord
+      if (!isDiscordLinked && session.user?.app_metadata?.provider === 'discord') {
+        isDiscordLinked = true;
+      }
       
       setDiscordLinked(isDiscordLinked);
-      setDiscordUsername(
+      
+      // Get username with fallbacks
+      const discordUsername = 
         session.user?.user_metadata?.discord_username || 
         session.user?.user_metadata?.full_name || 
-        (isDiscordLinked ? session.user?.user_metadata?.full_name : null)
-      );
+        session.user?.user_metadata?.name ||
+        null;
+        
+      setDiscordUsername(discordUsername);
       
       // Check Steam connection
       const steamId = session.user?.user_metadata?.steamId;
@@ -119,7 +131,7 @@ function AccountContent() {
     
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      async (event: string, newSession: Session | null) => {
         console.log("Auth state change:", event);
         
         if (event === 'SIGNED_OUT') {
@@ -175,7 +187,7 @@ function AccountContent() {
       setDebugInfo({
         userDetails: userData?.user || null,
         userError: userError?.message || null,
-        providers: userData?.user?.identities?.map(id => id.provider) || [],
+        providers: userData?.user?.identities?.map((id: { provider: string }) => id.provider) || [],
         purchases: purchases || [],
         purchasesError: purchasesError?.message || null,
         session: {

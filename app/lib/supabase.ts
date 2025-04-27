@@ -10,8 +10,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ Missing required Supabase environment variables');
 }
 
-// IMPORTANT: Only use this client for server components or API routes
-// For client-side components, use createBrowserClient() instead
+// Create a singleton client for server-side usage
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
@@ -19,21 +18,36 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// This is the preferred way to get a client instance in client components
-// to avoid the "Multiple GoTrueClient instances" warning
-let browserClient: ReturnType<typeof createClientComponentClient> | null = null;
+// Global variable to store the browser client instance
+// @ts-ignore - This is intentional for global use
+let globalBrowserClient: any = null;
 
+/**
+ * Returns a singleton Supabase client for client-side components
+ * This ensures only one GoTrueClient instance exists per browser context
+ */
 export const createBrowserClient = () => {
-  if (typeof window === 'undefined') {
-    // We're on the server, return a new instance
-    return createClientComponentClient();
+  // Check for global singleton first (for non-module contexts)
+  // @ts-ignore - This is intentional for global use
+  if (typeof window !== 'undefined' && window.__SUPABASE_CLIENT) {
+    // @ts-ignore - This is intentional for global use
+    return window.__SUPABASE_CLIENT;
+  }
+
+  // For module context, use the module-scoped singleton
+  if (typeof window !== 'undefined') {
+    if (!globalBrowserClient) {
+      globalBrowserClient = createClientComponentClient();
+      
+      // Also store on window for absolute certainty of a single instance
+      // @ts-ignore - This is intentional for global use
+      window.__SUPABASE_CLIENT = globalBrowserClient;
+    }
+    return globalBrowserClient;
   }
   
-  // We're in the browser, return or create a singleton
-  if (!browserClient) {
-    browserClient = createClientComponentClient();
-  }
-  return browserClient;
+  // Server-side rendering case - create a new instance (will be discarded)
+  return createClientComponentClient();
 };
 
 export default supabase; 

@@ -1,23 +1,24 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import Navigation from "./components/Navigation";
-import Footer from "./components/Footer";
-import { Providers } from "./providers";
+import './globals.css';
+import type { Metadata } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
+import { Providers } from './providers';
+import Navigation from './components/Navigation';
+import Footer from './components/Footer';
+import ClientInitializer from './components/ClientInitializer';
 
 const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+  variable: '--font-geist-sans',
+  subsets: ['latin'],
 });
 
 const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
 });
 
 export const metadata: Metadata = {
-  title: "Wasteland Mods - Premium DayZ Mods",
-  description: "High-quality DayZ mods for server owners looking to enhance their player experience",
+  title: 'Wasteland Mods - Premium DayZ Mods',
+  description: 'High-quality DayZ mods for server owners looking to enhance their player experience',
 };
 
 export default function RootLayout({
@@ -34,6 +35,7 @@ export default function RootLayout({
           <Navigation />
           <main className="flex-grow">{children}</main>
           <Footer />
+          <ClientInitializer />
         </Providers>
       </body>
     </html>
