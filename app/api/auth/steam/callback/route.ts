@@ -64,15 +64,69 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(new URL(`/account?error=auth_session_error&callbackUrl=${encodeURIComponent(callbackUrl)}`, request.url));
       }
       
+      let userId;
+      
+      // Check if the user is authenticated - if not, we'll create a new account with Steam
       if (!session?.user) {
-        console.log("⚠️ No authenticated user found to link Steam account");
-        // If no user is logged in, redirect to login and save the Steam ID in query param
-        // This can be handled later to complete the linking process after login
-        return NextResponse.redirect(
-          new URL(`/account?steamPending=${steamId}&steamUsername=${encodeURIComponent(steamProfile.personaname || '')}&callbackUrl=${encodeURIComponent(callbackUrl)}`, 
-          request.url)
-        );
-      }
+        console.log("ℹ️ No authenticated user found - creating account with Steam");
+        
+        // Attempt to sign in or create an account with Steam credentials
+        const { data: authData, error: authError } = await supabase.auth.signInWithIdToken({
+          provider: 'steam',
+          token: steamId, // Steam doesn't use a token in the traditional sense
+          nonce: steamProfile.personaname, // Use personaname as a nonce (for custom implementation)
+        });
+        
+        if (authError) {
+          console.error("❌ Error creating Steam user:", authError);
+          
+          // If we can't sign in with IdToken (custom provider might not be set up),
+          // try creating a user through a custom flow for Steam
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: `steam_${steamId}@steamcommunity.id`,
+            password: crypto.randomUUID(), // Generate a random password
+            options: {
+              data: {
+                steamId: steamId,
+                steamUsername: steamProfile.personaname,
+                steamAvatar: steamProfile.avatarfull,
+                provider: 'steam',
+                steamProfileUpdatedAt: new Date().toISOString()
+              }
+            }
+          });
+          
+          if (signUpError) {
+            console.error("❌ Error creating Steam user account:", signUpError);
+            return NextResponse.redirect(new URL(`/account?error=steam_auth_failed`, request.url));
+          }
+          
+          userId = signUpData.user?.id;
+          console.log("✅ Created new account with Steam identity, user ID:", userId);
+        } else {
+          userId = authData.user?.id;
+          console.log("✅ Signed in with Steam identity, user ID:", userId);
+        }
+        
+        // Get the updated session after sign-in or sign-up
+        const { data: { session: updatedSession } } = await supabase.auth.getSession();
+        
+        if (updatedSession) {
+          console.log("✅ Session created successfully after Steam auth");
+          
+          // Redirect to the callback URL with success message
+          const res = NextResponse.redirect(new URL(callbackUrl, request.url));
+          res.headers.set('X-Auth-Debug', 'Steam session created');
+          
+          return res;
+        } else {
+          console.error("❌ No session after Steam authentication");
+          return NextResponse.redirect(new URL(`/account?error=steam_session_error`, request.url));
+        }
+      } 
+      
+      // If we have a session, link the Steam account to the existing user
+      userId = session.user.id;
       
       // Update user metadata to include Steam ID
       const { data: updateData, error: updateError } = await supabase.auth.updateUser({
@@ -96,7 +150,9 @@ export async function GET(request: NextRequest) {
       if (callbackUrl && callbackUrl !== '/account') {
         return NextResponse.redirect(new URL(callbackUrl, request.url));
       } else {
-        return NextResponse.redirect(new URL('/account?steam=linked', request.url));
+        const res = NextResponse.redirect(new URL('/account?steam=linked', request.url));
+        res.headers.set('X-Auth-Debug', 'Steam linked to existing account');
+        return res;
       }
     } catch (steamApiError) {
       console.error("❌ Steam API error:", steamApiError);
